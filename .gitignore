@@ -1,12 +1,10 @@
 # Local workspace metadata
-.freebuff/
 .vscode/
 .idea/
 
 # Environment and local configuration
-.env
-.env.*
-!.env.example
+config.local.php
+config.php
 
 # Operating system files
 .DS_Store
@@ -21,6 +19,9 @@ Desktop.ini
 *.swp
 *.swo
 *.bak
+
+# KoolReport generated assets & cache
+assets/report-assets/
 
 # Local database files
 *.db
