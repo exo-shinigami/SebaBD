@@ -1,0 +1,32 @@
+# Local workspace metadata
+.freebuff/
+.vscode/
+.idea/
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs, caches, and temporary files
+*.log
+*.tmp
+*.temp
+*.cache
+*.swp
+*.swo
+*.bak
+
+# Local database files
+*.db
+*.db-shm
+*.db-wal
+
+# PHP and Composer generated files
+composer.lock
+.phpunit.result.cache
