@@ -1,0 +1,392 @@
+<?php
+
+/**
+ * This file is wrapper class for Google Chart
+ *
+ * @category  Core
+ * @package   KoolReport
+ * @author    KoolPHP Inc <support@koolphp.net>
+ * @copyright 2017-2028 KoolPHP Inc
+ * @license   MIT License https://www.koolreport.com/license#mit-license
+ * @link      https://www.koolphp.net
+ */
+
+namespace koolreport\widgets\google;
+
+use \koolreport\core\DataStore;
+use \koolreport\core\Utility as Util;
+use \koolreport\core\Widget;
+
+/**
+ * This file is wrapper class for Google Chart
+
+ * generated-shape-start emit-shapes.php
+ * | option | type | default | description |
+ * |---|---|---|---|
+ * | `clientEvents` | array | `array()` | Client-side event handlers. A map of event name => JavaScript function string. Handlers are invoked for the wrapper's own events: `itemSelect`, `rowSelect`, `columnSelect`, `select`, `init`, `drawing`, `drawed`. |
+ * | `colorScheme` | array |  | List of colors applied to chart, for example: `"colorScheme"=>array("#000","#444","#888")` |
+ * | `columns` | array | `null` | List of columns and its settings |
+ * | `data` | array |  | The chart's data as a PHP array of associative rows. Column types are guessed from the first row. Prefer `dataSource`/`dataStore` for datastore-backed charts. |
+ * | `height` | string | `400px` | Height of chart in `px` or `%` |
+ * | `language` | string |  | Locale passed to Google's `google.charts.load()` for chart UI text (tooltips, legends). |
+ * | `mapsApiKey` | string |  | Google Maps API key, required by map-based chart packages (GeoChart, Map) when Google must load the Maps API. |
+ * | `options` | array | `array()` | This is the options for specific charts. It may vary from charts to charts so for more information, please look at example for specific chart below and its options. |
+ * | `pointerOnHover` | bool |  | Show a pointer (hand) cursor over chart elements on hover. |
+ * | `stability` | string |  | Version selector for Google's Charts loader. Commonly `current` or `latest`; an explicit version string is also accepted and forwarded verbatim. |
+ * | `title` | string |  | Title of chart |
+ * | `type` | string |  | The Google visualization chart class name (e.g. `"ColumnChart"`, `"PieChart"`, `"GeoChart"`). Only honoured on the base `Chart` class; concrete classes set it from their class name. |
+ * | `width` | string | `100%` | Width of chart in `px` or `%` |
+ * generated-shape-end emit-shapes.php
+ *
+ * @method static mixed create(array{
+ *     clientEvents?: array,
+ *     colorScheme?: array,
+ *     columns?: array,
+ *     data?: array,
+ *     height?: string,
+ *     language?: string,
+ *     mapsApiKey?: string,
+ *     options?: array,
+ *     pointerOnHover?: bool,
+ *     stability?: string,
+ *     title?: string,
+ *     type?: string,
+ *     width?: string,
+ * } $params, bool $return = false)
+
+ * @category  Core
+ * @package   KoolReport
+ * @author    KoolPHP Inc <support@koolphp.net>
+ * @copyright 2017-2028 KoolPHP Inc
+ * @license   MIT License https://www.koolreport.com/license#mit-license
+ * @link      https://www.koolphp.net
+ */
+class Chart extends Widget implements ChartOptions
+{
+    protected $chartId;
+    protected $columns;
+    protected $options;
+    protected $type;
+    protected $width;
+    protected $height;
+    protected $title;
+    protected $colorScheme;
+    protected $data;
+    protected $clientEvents;
+    protected $pointerOnHover;
+
+    protected $mapsApiKey;
+    protected $package = "corechart";
+    protected $stability = "current";
+    protected $language = "en";
+
+    /**
+     * Return the resource settings for table
+     *
+     * @return array The resource settings of table widget
+     */
+    protected function resourceSettings()
+    {
+        return array(
+            "library" => array("jQuery"),
+            "folder" => "clients",
+            "js" => array("googlechart.js"),
+        );
+    }
+
+    /**
+     * Return the resource settings for table
+     *
+     * @return array The resource settings of table widget
+     */
+    protected function onInit()
+    {
+        $this->useDataSource();
+        $this->useAutoName("gchart");
+
+        $this->clientEvents = Util::get($this->params, "clientEvents", array());
+        $this->columns = Util::get($this->params, "columns", null);
+        $this->options = Util::get($this->params, "options", array());
+        $this->width = Util::get($this->params, "width", "100%");
+        $this->height = Util::get($this->params, "height", "400px");
+        $this->title = Util::get($this->params, "title");
+        $this->pointerOnHover = Util::get($this->params, "pointerOnHover");
+        $this->mapsApiKey = Util::get($this->params, "mapsApiKey", '');
+        $this->language = Util::get($this->params, "language", $this->language);
+        $this->stability = Util::get($this->params, "stability", $this->stability);
+
+        if (!$this->dataStore) {
+            //Backward compatible with setting through "data"
+            $data = Util::get($this->params, "data");
+            if (is_array($data)) {
+                if (count($data) > 0) {
+                    $this->dataStore = new DataStore;
+                    $this->dataStore->data($data);
+                    $row = $data[0];
+                    $meta = array("columns" => array());
+                    foreach ($row as $cKey => $cValue) {
+                        $meta["columns"][$cKey] = array(
+                            "type" => Util::guessType($cValue),
+                        );
+                    }
+                    $this->dataStore->meta($meta);
+                } else {
+                    $this->dataStore = new DataStore;
+                    $this->dataStore->data(array());
+                    $this->dataStore->meta(array("columns" => array()));
+                }
+            }
+            if ($this->dataStore == null) {
+                throw new \Exception("dataSource is required");
+                return;
+            }
+        }
+
+        $this->type = Util::getClassName($this);
+        if ($this->type == "Chart") {
+            $this->type = Util::get($this->params, "type");
+        }
+        //Color Scheme
+        $this->colorScheme = Util::get($this->params, "colorScheme");
+        if (!is_array($this->colorScheme)) {
+            $theme = $this->getReport()->getTheme();
+            if ($theme) {
+                $theme->applyColorScheme($this->colorScheme);
+            }
+        }
+        if (!is_array($this->colorScheme)) {
+            $this->colorScheme = null;
+        }
+    }
+
+    /**
+     * Converting the type
+     *
+     * @param string $type Type of data
+     *
+     * @return string New type
+     */
+    protected function typeConvert($type)
+    {
+        $map = array(
+            "datetime" => "datetime",
+            "unknown" => "string",
+            "string" => "string",
+            "number" => "number",
+        );
+        return isset($map[$type]) ? $map[$type] : "string";
+    }
+
+    /**
+     * Improve the column settings
+     *
+     * @return array Collumn section
+     */
+    protected function getColumnSettings()
+    {
+        //If there is the user input columns then parse them to columns from user input
+        //If the user does not input collumns then take the default by looking at data
+        // Then mixed with default in meta
+        $meta = $this->dataStore->meta();
+        $columns = array();
+        if ($this->columns != null) {
+            foreach ($this->columns as $cKey => $cValue) {
+                if (gettype($cValue) == "array") {
+                    $cMeta = Util::get($meta, ["columns", $cKey], []);
+                    $columns[$cKey] = array_merge($cMeta, $cValue);
+                } else {
+                    $columns[$cValue] = $meta["columns"][$cValue];
+                }
+            }
+        } else {
+            $keys = array_keys($this->dataStore[0]);
+            foreach ($keys as $ckey) {
+                $columns[$ckey] = $meta["columns"][$ckey];
+            }
+        }
+        return $columns;
+    }
+
+    /**
+     * Convert server-side date to client-side format
+     * 
+     * @param string $value The datetime
+     * @param array  $meta  The meta data
+     * 
+     * @return string The client-side date format
+     */
+    protected function newClientDate($value, $meta)
+    {
+        $format = Util::get($meta, "format");
+        $type = Util::get($meta, "type");
+        switch ($type) {
+            case "date":
+                $format = $format ? $format : "Y-m-d";
+                $toFormat = "Y,(n-1),d";
+                break;
+            case "time":
+                $format = $format ? $format : "H:i:s";
+                $toFormat = "0,0,0,H,i,s";
+                break;
+            case "datetime":
+            default:
+                $format = $format ? $format : "Y-m-d H:i:s";
+                $toFormat = "Y,(n-1),d,H,i,s";
+                break;
+        }
+        //The (n-1) above is because in Javascript, month start from 0 to 11
+        $date = \DateTime::createFromFormat($format, $value);
+
+        if ($date) {
+            return "function() {return new Date(" . \DateTime::createFromFormat($format, $value)->format($toFormat) . ");}()";
+        }
+        return "null";
+    }
+
+    /**
+     * Prepare data
+     *
+     * @return null
+     */
+    protected function prepareData()
+    {
+        //Now we have $columns contain all real columns settings
+
+        $columns = $this->getColumnSettings();
+
+        $data = array();
+        $header = array();
+        $columnExtraRoles = array(
+            "annotation", "annotationText", "certainty", "emphasis", "interval", "scope", "style", "tooltip"
+        );
+        foreach ($columns as $cKey => $cSetting) {
+            $role = Util::get($cSetting, 'role');
+            if (in_array($role, $columnExtraRoles)) {
+                array_push($header, $cSetting);
+            } else {
+                array_push($header, "" . Util::get($cSetting, "label", $cKey));
+                foreach ($columnExtraRoles as $cRole) {
+                    if (isset($cSetting[$cRole])) {
+                        array_push(
+                            $header,
+                            array(
+                                "role" => $cRole,
+                            )
+                        );
+                    }
+                }
+            }
+        }
+        array_push($data, $header);
+
+        foreach ($this->dataStore as $row) {
+            $gRow = array();
+            foreach ($columns as $cKey => $cSetting) {
+                $value = Util::get($row, $cKey);
+                $cType = Util::get($cSetting, "type", "unknown");
+                if ($cType === "number") {
+                    $value = $value !== null ? floatval($value) : $value;
+                } else if ($cType === "string") {
+                    $value = "$value";
+                } else if ($cType === "datetime" || $cType === "date" || $cType === "time") {
+                    if ($this->type !== 'PieChart') {
+                        $value = $this->newClientDate($value, $cSetting);
+                    }
+                }
+                $fValue = $this->formatValue($value, $cSetting, $row);
+
+                $role = Util::get($cSetting, "role");
+                $columnExtraRoles = array(
+                    "annotation", "annotationText", "certainty", "emphasis", "interval", "scope", "style", "tooltip"
+                );
+                if (in_array($role, $columnExtraRoles)) {
+                    array_push($gRow, $fValue);
+                } else {
+                    array_push(
+                        $gRow,
+                        ($fValue === $value)
+                            ? $value
+                            : array("v" => $value, "f" => $fValue)
+                    );
+                }
+                
+                foreach ($columnExtraRoles as $cRole) {
+                    if (isset($cSetting[$cRole])) {
+                        array_push(
+                            $gRow,
+                            (gettype($cSetting[$cRole]) == "object") ?
+                            $cSetting[$cRole]($row) :
+                            $cSetting[$cRole]
+                        );
+                    }
+                }
+            }
+            array_push($data, $gRow);
+        }
+        return $data;
+    }
+
+    /**
+     * Return the formatted value
+     *
+     * @param mixed $value  The value needed to be formatted
+     * @param array $format The format
+     * @param array $row    The row containing this value
+     *
+     * @return null
+     */
+    protected function formatValue($value, $format, $row = null)
+    {
+        $formatValue = Util::get($format, "formatValue", null);
+
+        if (is_string($formatValue)) {
+            $fv = $formatValue;
+            eval('$fv=' . str_replace('@value', '$value', $formatValue) . ';');
+            return Util::format($fv, $format);
+        } else if (is_callable($formatValue)) {
+            return $formatValue($value, $row);
+        } else {
+            return Util::format($value, $format);
+        }
+    }
+
+    /**
+     * Handle on render
+     *
+     * @return null
+     */
+    protected function onRender()
+    {
+        if ($this->dataStore->countData() > 0) {
+            //Update options
+            $options = $this->options;
+            if ($this->title) {
+                $options["title"] = $this->title;
+            }
+            if ($this->colorScheme) {
+                $options["colors"] = $this->colorScheme;
+            }
+            //Render
+            $viewTemplate = "Chart";
+            // $viewTemplate = $this->jsonRender ? "ChartJson" : "Chart";
+            // echo "viewTemplate: $viewTemplate<br>";
+            $this->template(
+                $viewTemplate,
+                array(
+                    "chartType" => $this->type,
+                    "options" => $options,
+                    "data" => $this->prepareData(),
+                    "cKeys" => array_keys($this->getColumnSettings()),
+                    "loader" => array(
+                        "package" => $this->package,
+                        "stability" => $this->stability,
+                        "language" => $this->language,
+                        "mapsApiKey" => $this->mapsApiKey
+                    )
+                )
+            );
+        } else {
+            $this->template("NoData");
+        }
+    }
+}

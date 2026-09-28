@@ -1,0 +1,785 @@
+:root {
+    --page-bg: #f4f6f8;
+    --surface: #ffffff;
+    --surface-strong: #10141b;
+    --surface-soft: #f7f9fb;
+    --text-main: #1c2430;
+    --text-muted: #66707d;
+    --accent: #0ea5b5;
+    --accent-strong: #0b8494;
+    --border: rgba(28, 36, 48, 0.12);
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    background:
+        radial-gradient(circle at top left, rgba(14, 165, 181, 0.10), transparent 28%),
+        linear-gradient(180deg, #fbfcfd 0%, var(--page-bg) 100%);
+    color: var(--text-main);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+a {
+    color: inherit;
+}
+
+.app-shell {
+    min-height: 100vh;
+}
+
+.top-strip,
+.main-nav,
+.footer-bar {
+    background: var(--surface-strong);
+    color: #fff;
+}
+
+.main-nav {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.top-strip a,
+.footer-bar a {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.brand-logo {
+    height: 2.6rem;
+    width: auto;
+    display: inline-block;
+}
+
+.brand-logo-sm {
+    height: 2.1rem;
+    width: auto;
+    display: inline-block;
+}
+
+.search-form .form-control {
+    min-width: 220px;
+    border-color: transparent;
+}
+
+.search-form .btn {
+    background: #fff;
+    color: var(--surface-strong);
+    border-color: #fff;
+}
+
+.cart-btn {
+    border-radius: 999px;
+    padding: 0.55rem 0.85rem;
+}
+
+.hero-section {
+    background:
+        linear-gradient(135deg, rgba(16, 20, 27, 0.96), rgba(13, 46, 54, 0.94)),
+        radial-gradient(circle at top right, rgba(14, 165, 181, 0.30), transparent 40%);
+    color: #fff;
+}
+
+.hero-trust span {
+    white-space: nowrap;
+}
+
+.section-pill,
+.section-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.section-label {
+    color: var(--accent-strong);
+}
+
+.hero-card,
+.sidebar-card,
+.product-card,
+.feature-card,
+.deals-card {
+    border-radius: 1.25rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 45px rgba(16, 24, 32, 0.08);
+}
+
+.hero-card {
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+}
+
+.btn-accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.btn-accent:hover {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+    color: #fff;
+}
+
+.sidebar-card {
+    background: var(--surface);
+    padding: 1.25rem;
+}
+
+.sidebar-card .list-group-item {
+    border-color: rgba(28, 36, 48, 0.08);
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.sidebar-card .list-group-item:hover {
+    color: var(--accent-strong);
+    background: transparent;
+}
+
+.cat-icon {
+    width: 1.4rem;
+    color: var(--accent-strong);
+}
+
+.product-card {
+    overflow: hidden;
+    background: var(--surface);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 50px rgba(16, 24, 32, 0.12);
+}
+
+.product-image {
+    width: 100%;
+    height: 230px;
+    object-fit: cover;
+    background: var(--surface-soft);
+}
+
+.price {
+    font-weight: 800;
+    color: var(--surface-strong);
+}
+
+.deals-section {
+    background:
+        linear-gradient(135deg, rgba(16, 20, 27, 0.97), rgba(15, 58, 66, 0.95)),
+        radial-gradient(circle at bottom left, rgba(14, 165, 181, 0.28), transparent 45%);
+    color: #fff;
+}
+
+.deals-card {
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.feature-card {
+    background: var(--surface);
+    padding: 1.5rem;
+}
+
+.feature-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    background: rgba(14, 165, 181, 0.12);
+    color: var(--accent-strong);
+}
+
+.footer-bar {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footer-bar p,
+.footer-bar a {
+    margin-bottom: 0;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.footer-bar ul li {
+    margin-bottom: 0.4rem;
+}
+
+.footer-bar ul a {
+    text-decoration: none;
+}
+
+.footer-bar ul a:hover {
+    color: #fff;
+}
+
+.newsletter-form .form-control {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    min-width: 0;
+}
+
+.newsletter-form .form-control::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.newsletter-form .form-control:focus {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 0.2rem rgba(14, 165, 181, 0.25);
+}
+
+.footer-bar .social-link {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 991.98px) {
+    .search-form {
+        margin-top: 1rem;
+    }
+
+    .search-form .form-control {
+        min-width: 0;
+        width: 100%;
+    }
+
+    .search-form {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .search-form .btn {
+        width: 100%;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .hero-card,
+    .sidebar-card,
+    .feature-card,
+    .deals-card {
+        padding: 1rem;
+    }
+
+    .product-image {
+        height: 200px;
+    }
+}
+
+/* ------------------------------------------------------------ forms */
+
+.auth-page {
+    background:
+        radial-gradient(circle at 85% 10%, rgba(26, 107, 95, 0.10), transparent 32%),
+        var(--page-bg);
+}
+
+.form-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: 0 18px 40px rgba(28, 36, 48, 0.08);
+    padding: 1.75rem;
+}
+
+.form-card-head {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.form-section-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 1.4rem 0 0.9rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px dashed var(--border);
+}
+
+.form-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.3rem;
+}
+
+.form-label .req {
+    color: #c0392b;
+}
+
+.input-group-text {
+    background: var(--surface-soft);
+    border-color: var(--border);
+    color: var(--text-muted);
+}
+
+.form-note {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 0.6rem;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Line items (quotation / order forms) */
+
+.line-items {
+    margin-top: 0.25rem;
+}
+
+.line-item-row {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+.line-item-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 90px 130px 150px auto;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+@media (max-width: 767.98px) {
+    .line-item-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .line-cell-product,
+    .line-cell-total {
+        grid-column: 1 / -1;
+    }
+}
+
+.line-total {
+    font-weight: 700;
+    display: inline-block;
+}
+
+.totals-box {
+    border-top: 2px solid var(--border);
+    margin-top: 1.25rem;
+    padding-top: 1rem;
+}
+
+.add-row {
+    margin-top: 0.25rem;
+}
+
+/* ---------------------------------------------------------- reports */
+
+.report-lead {
+    background:
+        linear-gradient(135deg, rgba(16, 20, 27, 0.97), rgba(15, 58, 66, 0.95)),
+        radial-gradient(circle at top right, rgba(14, 165, 181, 0.32), transparent 45%);
+}
+
+.report-lead .section-label {
+    color: rgba(14, 165, 181, 0.95);
+}
+
+.report-lead-sub {
+    color: rgba(255, 255, 255, 0.75);
+    max-width: 62ch;
+}
+
+.report-hub-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    box-shadow: 0 18px 40px rgba(16, 24, 32, 0.07);
+    padding: 1.5rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    text-decoration: none;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.report-hub-link {
+    color: var(--accent-strong);
+}
+
+.report-hub-locked {
+    opacity: 0.65;
+    box-shadow: none;
+}
+
+.report-hub-locked:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.report-hub-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 24px 50px rgba(16, 24, 32, 0.12);
+}
+
+.report-hub-icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    background: rgba(14, 165, 181, 0.12);
+    color: var(--accent-strong);
+}
+
+.report-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: 0 18px 40px rgba(28, 36, 48, 0.06);
+    padding: 1.25rem 1.35rem 1.35rem;
+    margin-bottom: 1rem;
+}
+
+.report-panel-head {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.report-panel-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--surface-strong);
+}
+
+.report-panel-sub {
+    margin: 0.2rem 0 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.report-kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: 0 14px 30px rgba(28, 36, 48, 0.06);
+    padding: 1rem 1.1rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.report-kpi-icon {
+    color: var(--accent-strong);
+    font-size: 1rem;
+    margin-bottom: 0.35rem;
+}
+
+.report-kpi-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.report-kpi-value {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: var(--surface-strong);
+    line-height: 1.2;
+}
+
+.report-kpi-hint {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.report-filter {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: 0 14px 30px rgba(28, 36, 48, 0.06);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.report-filter-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.report-filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.report-filter-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.report-filter-note {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+/* KoolReport widgets inside the report panels */
+
+.report-panel .koolphp-table table {
+    margin-bottom: 0;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    --bs-table-border-color: var(--border);
+    --bs-table-bg: transparent;
+}
+
+.report-panel .koolphp-table thead th,
+.report-panel .koolphp-table tbody td,
+.report-panel .koolphp-table tfoot td {
+    padding: 0.45rem 0.5rem;
+}
+
+.report-panel .koolphp-table thead th,
+.report-panel .report-th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 700;
+    color: var(--text-muted);
+    border-bottom-width: 1px;
+    white-space: nowrap;
+}
+
+.report-panel .koolphp-table tbody td {
+    color: var(--text-main);
+    border-color: rgba(28, 36, 48, 0.08);
+    vertical-align: middle;
+}
+
+.report-panel .koolphp-table tfoot td {
+    font-weight: 700;
+    color: var(--surface-strong);
+    border-top: 2px solid var(--border);
+    background: var(--surface-soft);
+}
+
+.report-panel .koolphp-table tbody tr:hover td {
+    background: rgba(14, 165, 181, 0.05);
+}
+
+.report-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.report-badge-ok {
+    background: rgba(47, 163, 107, 0.14);
+    color: #1f7a4d;
+}
+
+.report-badge-info {
+    background: rgba(61, 127, 242, 0.14);
+    color: #2b5fc4;
+}
+
+.report-badge-warn {
+    background: rgba(240, 165, 0, 0.16);
+    color: #8a6000;
+}
+
+.report-badge-danger {
+    background: rgba(224, 86, 91, 0.14);
+    color: #b03a3f;
+}
+
+.report-badge-plain {
+    background: rgba(28, 36, 48, 0.08);
+    color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------- ajax */
+
+/* Rendered by assets/ajax.js; empty until something goes wrong. */
+.ajax-errors:not(:empty) {
+    margin-bottom: 1rem;
+}
+
+form.is-busy {
+    opacity: 0.75;
+}
+
+form.is-busy button[type="submit"]::after {
+    content: "";
+    display: inline-block;
+    width: 0.8rem;
+    height: 0.8rem;
+    margin-left: 0.5rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -1px;
+    animation: ajax-spin 0.7s linear infinite;
+}
+
+@keyframes ajax-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Live availability hints under a form field. */
+.field-hint {
+    display: block;
+    font-size: 0.78rem;
+    margin-top: 0.25rem;
+}
+
+.field-hint:empty {
+    display: none;
+}
+
+/* Per-line stock note on the order / quotation forms. */
+.line-stock {
+    display: block;
+    font-size: 0.8rem;
+    margin-top: 0.35rem;
+    line-height: 1.35;
+}
+
+/* Live search suggestions under the header search box. */
+.search-form {
+    position: relative;
+}
+
+.search-suggestions {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.85rem;
+    box-shadow: 0 20px 45px rgba(16, 24, 32, 0.22);
+    overflow: hidden auto;
+    max-height: 22rem;
+}
+
+.search-suggestion {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid rgba(28, 36, 48, 0.08);
+    text-decoration: none;
+    color: var(--text-main);
+}
+
+.search-suggestion:last-of-type {
+    border-bottom: 0;
+}
+
+.search-suggestion:hover,
+.search-suggestion.is-active {
+    background: var(--surface-soft);
+}
+
+.search-suggestion img {
+    width: 2.5rem;
+    height: 2.5rem;
+    flex: 0 0 2.5rem;
+    object-fit: cover;
+    border-radius: 0.5rem;
+    background: var(--surface-soft);
+}
+
+.search-suggestion-body {
+    display: block;
+    min-width: 0;
+}
+
+.search-suggestion-name {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.2;
+}
+
+.search-suggestion-meta {
+    display: block;
+    font-size: 0.76rem;
+    color: var(--text-muted);
+}
+
+.search-suggestion-empty {
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.search-suggestion-search {
+    display: block;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: var(--surface-soft);
+    color: var(--accent-strong);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.search-suggestion-search:hover {
+    background: rgba(14, 165, 181, 0.1);
+}
+
+/* The storefront grid while it is being swapped in by AJAX. */
+[data-product-panel].is-loading {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
