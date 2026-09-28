@@ -16,7 +16,7 @@ html {
 
 body {
     background:
-        radial-gradient(circle at top left, rgba(14, 165, 181, 0.10), transparent 28%),
+        radial-gradient(circle at top left, rgba(0, 229, 255, 0.1), transparent 28%),
         linear-gradient(180deg, #fbfcfd 0%, var(--page-bg) 100%);
     color: var(--text-main);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
