@@ -16,7 +16,7 @@
     // The currency symbol is rendered by PHP onto .line-items[data-currency],
     // so config.php stays the single source of truth.
     function fmt(amount, symbol) {
-        return (symbol || '$') + ' ' + Number(amount || 0).toLocaleString('en-US', {
+        return (symbol || '৳') + ' ' + Number(amount || 0).toLocaleString('en-US', {
             minimumFractionDigits: 2, maximumFractionDigits: 2
         });
     }
@@ -30,7 +30,7 @@
     }
 
     function refresh(container) {
-        const symbol = container.dataset.currency || '$';
+        const symbol = container.dataset.currency || '৳';
         let grand = 0;
         container.querySelectorAll('.line-item-row').forEach(row => {
             const t = rowTotal(row);

@@ -7,7 +7,7 @@
  * remains the single source of truth for products, categories, stock and
  * prices; this file only decorates what the database returns.
  *
- * If MySQL is unreachable, these arrays double as a demo fallback so the
+ * If MySQL is unreachable, these arrays double as an offline fallback so the
  * storefront still renders.
  */
 
@@ -26,23 +26,23 @@ function product_meta(): array
     return [
         1 => [
             'image' => 'images/products/laptop.jpg',
-            'alt'   => 'HP ProBook Enterprise 15 business laptop',
+            'alt'   => 'HP ProBook 450 G10 business laptop',
             'badge' => 'Hot',
-            'blurb' => 'HP business notebook (PB-15-2024) supplied as a serialized unit — 24-month warranty tracked per device.',
-            'sale'  => 1320.00,
+            'blurb' => 'HP ProBook 450 G10 business notebook (Core i5, 16 GB) — 24-month warranty tracked per serial number.',
+            'sale'  => 158400.00,
         ],
         2 => [
             'image' => 'images/products/monitor.jpg',
             'alt'   => 'Dell UltraSharp 27-inch 4K monitor',
             'badge' => 'Deal',
             'blurb' => 'Dell UltraSharp 4K IPS panel (U2723QE) with USB-C docking and factory colour calibration — 12-month warranty.',
-            'sale'  => 620.00,
+            'sale'  => 74400.00,
         ],
         3 => [
             'image' => 'images/products/switch.jpg',
             'alt'   => 'Cisco 24-port managed network switch',
             'badge' => 'New',
-            'blurb' => 'Cisco CBS350 24-port managed gigabit switch — serialized stock with a 36-month manufacturer warranty.',
+            'blurb' => 'Cisco CBS350-24T 24-port managed gigabit switch — 36-month manufacturer warranty tracked per serial number.',
             'sale'  => null,
         ],
         4 => [
@@ -50,7 +50,7 @@ function product_meta(): array
             'alt'   => 'Logitech MX Master 3S wireless mouse',
             'badge' => 'Deal',
             'blurb' => 'Logitech MX Master 3S wireless mouse — quiet clicks, 8,000 DPI tracking and multi-device switching.',
-            'sale'  => 119.99,
+            'sale'  => 14400.00,
         ],
     ];
 }
@@ -111,7 +111,7 @@ function get_product_count(): int
  * Featured products for the storefront grid: one representative product per
  * category (lowest ProductID in each), so the homepage shows the full range.
  * Reads live data from the DB and merges in the presentation metadata; falls
- * back to a demo catalog when the database is unreachable.
+ * back to the offline catalogue when the database is unreachable.
  */
 function get_featured_products(int $limit = 12): array
 {
@@ -147,10 +147,10 @@ function get_featured_products(int $limit = 12): array
     // Offline fallback: one representative item per category, mirroring the
     // live query's per-category pick. [id, name, brand, category, price, serialized, qty]
     $fallback = [
-        [1, 'ProBook Enterprise 15',              'HP',       'Laptops & Computers',  '1200.00', 1, 0],
-        [2, 'UltraSharp 27" 4K Monitor',          'Dell',     'Monitors & Displays',   '550.00', 0, 45],
-        [3, 'Enterprise Managed Switch 24-Port',  'Cisco',    'Networking Equipment',  '850.00', 1, 0],
-        [4, 'Ergonomic Wireless Mouse',           'Logitech', 'Accessories',            '99.99', 0, 120],
+        [1, 'ProBook 450 G10',                    'HP',       'Laptops & Computers',   '144000.00', 1, 0],
+        [2, 'UltraSharp 27" 4K Monitor',          'Dell',     'Monitors & Displays',   '66000.00',  0, 45],
+        [3, 'CBS350-24T 24-Port Managed Switch',  'Cisco',    'Networking Equipment',  '102000.00', 1, 0],
+        [4, 'MX Master 3S Wireless Mouse',        'Logitech', 'Accessories',           '12000.00',  0, 120],
     ];
 
     $products = [];
@@ -302,6 +302,97 @@ function search_products(string $query = '', int $categoryId = 0, int $limit = 2
     }
 
     return $products;
+}
+
+/**
+ * One product with its category and vendor, shaped like get_featured_products()
+ * plus VendorID / VendorName / VendorLocation / VendorPhone.
+ * Returns null when the id does not exist (product.php then shows a friendly
+ * "not found" panel instead of an error).
+ */
+function get_product(int $productId): ?array
+{
+    if ($productId <= 0) {
+        return null;
+    }
+
+    $rows = db_fetch_all(
+        'SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                p.CategoryID, c.CategoryName,
+                v.VendorID, v.VendorName, v.Location AS VendorLocation,
+                v.ContactPhone AS VendorPhone
+         FROM product p
+         JOIN category c ON c.CategoryID = p.CategoryID
+         JOIN vendor   v ON v.VendorID   = p.VendorID
+         WHERE p.ProductID = :id',
+        [':id' => $productId]
+    );
+
+    if (!$rows) {
+        return null;
+    }
+
+    return array_merge($rows[0], product_meta()[$productId] ?? [
+        'image' => null,
+        'alt'   => $rows[0]['ProductName'],
+        'badge' => null,
+        'blurb' => '',
+        'sale'  => null,
+    ]);
+}
+
+/**
+ * Other products in the same category, for the "Related products" strip on the
+ * product page. Same shape as get_featured_products().
+ */
+function related_products(int $productId, int $categoryId, int $limit = 3): array
+{
+    $limit = max(1, min(12, $limit));
+    if ($categoryId <= 0) {
+        return [];
+    }
+
+    $rows = db_fetch_all(
+        'SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                c.CategoryName
+         FROM product p
+         JOIN category c ON c.CategoryID = p.CategoryID
+         WHERE p.CategoryID = :cid AND p.ProductID <> :id
+         ORDER BY p.ProductID
+         LIMIT ' . $limit,
+        [':cid' => $categoryId, ':id' => $productId]
+    );
+
+    $products = [];
+    foreach ($rows as $row) {
+        $products[] = array_merge($row, product_meta()[(int) $row['ProductID']] ?? [
+            'image' => null,
+            'alt'   => $row['ProductName'],
+            'badge' => null,
+            'blurb' => '',
+            'sale'  => null,
+        ]);
+    }
+
+    return $products;
+}
+
+/**
+ * Serialized units of a product (the product_instance table). Only staff see
+ * this list; the storefront shows the available count instead.
+ */
+function product_units(int $productId): array
+{
+    return db_fetch_all(
+        'SELECT EquipmentID, SerialNumber, PurchaseDate, VendorWarrantyExpiry,
+                ClientWarrantyExpiry, Status
+         FROM product_instance
+         WHERE ProductID = :id
+         ORDER BY Status, EquipmentID',
+        [':id' => $productId]
+    );
 }
 
 /**

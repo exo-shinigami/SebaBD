@@ -15,11 +15,11 @@ return [
     'site' => [
         'name'     => 'SebaBD',
         'tagline'  => 'Total IT System Solution',
-        // The e_commerce catalog is priced in US dollars; the quotation and
-        // invoice sample data says "Dollars" too. Change these four values
-        // together if the schema ever moves back to another currency.
-        'currency'         => '$',
-        'currency_name'    => 'Dollars',
-        'currency_subunit' => 'Cents',
+        // The e_commerce catalog is priced in Bangladeshi taka; the quotation
+        // and invoice sample data says "Taka" too. Change these three values
+        // together if the catalog ever moves to another currency.
+        'currency'         => '৳',
+        'currency_name'    => 'Taka',
+        'currency_subunit' => 'Poisha',
     ],
 ];

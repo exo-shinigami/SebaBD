@@ -8,6 +8,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+const ROLE_CLIENT_ACCOUNT = 4;
+const ROLE_B2B_CLIENT_ACCOUNT = 5;
+
 /* ------------------------------------------------------------------ auth */
 
 function current_user(): ?array
@@ -57,6 +60,22 @@ function is_staff_user(?array $user = null): bool
     $user = $user ?? current_user();
 
     return $user !== null && in_array($user['RoleName'] ?? '', staff_roles(), true);
+}
+
+/**
+ * SebaBD customer roles — accounts that belong to the storefront rather than
+ * the staff/reporting side.
+ */
+function client_roles(): array
+{
+    return ['Client Account', 'B2B Client Account'];
+}
+
+function is_client_user(?array $user = null): bool
+{
+    $user = $user ?? current_user();
+
+    return $user !== null && in_array($user['RoleName'] ?? '', client_roles(), true);
 }
 
 /**
@@ -203,6 +222,18 @@ function old(string $key, string $default = ''): string
     return htmlspecialchars($_SESSION['old'][$key] ?? $default, ENT_QUOTES);
 }
 
+/**
+ * Raw old input as an array — used to rebuild repeated rows (product_id[],
+ * quantity[] …) after a validation error, so the customer does not lose a
+ * multi-line order or quotation.
+ */
+function old_array(string $key): array
+{
+    $value = $_SESSION['old'][$key] ?? [];
+
+    return is_array($value) ? $value : [];
+}
+
 function keep_old(array $data): void
 {
     $_SESSION['old'] = $data;
@@ -243,14 +274,15 @@ function sql_str(?string $value): string
 /* ---------------------------------------------------------- formatting */
 
 /**
- * Currency symbol from config.php (the e_commerce catalog is priced in USD).
+ * Currency symbol from config.php (the e_commerce catalog is priced in
+ * Bangladeshi taka).
  */
 function currency_symbol(): string
 {
     static $symbol = null;
     if ($symbol === null) {
         $cfg = require __DIR__ . '/config.php';
-        $symbol = $cfg['site']['currency'] ?? '$';
+        $symbol = $cfg['site']['currency'] ?? '৳';
     }
     return $symbol;
 }
@@ -270,17 +302,17 @@ function money(float|string|null $amount): string
  * INVOICE.AmountInWords). Matches the wording used by the sample data in
  * database/e_commerce.sql:
  *
- *   1750.00 -> "One Thousand Seven Hundred Fifty Dollars"
- *    499.95 -> "Four Hundred Ninety Nine Dollars and Ninety Five Cents"
- *       0.00 -> "Zero Dollars"
+ *   1750.00 -> "One Thousand Seven Hundred Fifty Taka"
+ *    499.95 -> "Four Hundred Ninety Nine Taka and Ninety Five Poisha"
+ *       0.00 -> "Zero Taka"
  *
  * The currency name comes from config.php.
  */
 function amount_in_words(float $amount): string
 {
     $cfg         = require __DIR__ . '/config.php';
-    $unitName    = $cfg['site']['currency_name'] ?? 'Dollars';
-    $subunitName = $cfg['site']['currency_subunit'] ?? 'Cents';
+    $unitName    = $cfg['site']['currency_name'] ?? 'Taka';
+    $subunitName = $cfg['site']['currency_subunit'] ?? 'Poisha';
 
     $amount = round($amount, 2);
     $units  = (int) $amount;

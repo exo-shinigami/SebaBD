@@ -4,7 +4,7 @@
  *
  * Single shared PDO connection. If MySQL is unreachable or the database has
  * not been imported yet, db() returns null instead of throwing, so pages can
- * fall back to demo data and still render.
+ * fall back to the offline catalogue and still render.
  */
 
 function db(): ?PDO

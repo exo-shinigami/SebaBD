@@ -60,29 +60,9 @@ $counts = stock_counts($products);
 
 <div class="row g-4" id="product-grid">
   <?php foreach ($products as $product): ?>
-  <div class="col-md-6 col-xl-4">
-    <div class="card product-card h-100">
-      <img src="<?= htmlspecialchars($product['image'] ?? '') ?>" class="card-img-top product-image" alt="<?= htmlspecialchars($product['alt'] ?? $product['ProductName']) ?>">
-      <div class="card-body d-flex flex-column">
-        <div class="d-flex justify-content-between align-items-start mb-2">
-          <h3 class="h5 card-title mb-0"><?= htmlspecialchars($product['ProductName']) ?></h3>
-          <?php if (!empty($product['badge'])): ?>
-          <span class="badge text-bg-dark"><?= htmlspecialchars($product['badge']) ?></span>
-          <?php endif; ?>
-        </div>
-        <?php if (!empty($product['Brand'])): ?>
-        <p class="text-muted small mb-2"><?= htmlspecialchars($product['Brand']) ?><?= !empty($product['Model']) ? ' · ' . htmlspecialchars($product['Model']) : '' ?></p>
-        <?php endif; ?>
-        <p class="card-text text-muted"><?= htmlspecialchars($product['blurb'] ?? '') ?></p>
-        <div class="mt-auto d-flex justify-content-between align-items-center">
-          <div>
-            <span class="price"><?= money($product['StandardPrice']) ?><?php if (!empty($product['sale'])): ?> <del class="text-muted fw-normal"><?= money($product['sale']) ?></del><?php endif; ?></span>
-            <small class="stock-line text-muted d-block"><?= htmlspecialchars(stock_label($product, $counts[(int) $product['ProductID']] ?? 0)) ?></small>
-          </div>
-          <a href="order.php" class="btn btn-sm btn-dark">Order</a>
-        </div>
-      </div>
-    </div>
-  </div>
+  <?= partial_render('partials/product-card.php', [
+      'product'   => $product,
+      'available' => $counts[(int) $product['ProductID']] ?? 0,
+  ]) ?>
   <?php endforeach; ?>
 </div>

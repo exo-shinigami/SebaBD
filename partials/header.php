@@ -59,6 +59,9 @@ $user = current_user();
                 <li class="nav-item"><a class="nav-link <?= $active_nav === 'categories' ? 'active' : '' ?>" href="index.php#categories">Categories</a></li>
                 <li class="nav-item"><a class="nav-link <?= $active_nav === 'deals' ? 'active' : '' ?>" href="index.php#deals">Deals</a></li>
                 <li class="nav-item"><a class="nav-link <?= $active_nav === 'contact' ? 'active' : '' ?>" href="index.php#footer">Contact</a></li>
+                <?php if ($user): ?>
+                <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'dashboard' ? 'active' : '' ?>" <?= $active_nav === 'dashboard' ? 'aria-current="page"' : '' ?> href="dashboard.php">Dashboard</a></li>
+                <?php endif; ?>
                 <?php if (is_staff_user($user)): ?>
                 <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'reports' ? 'active' : '' ?>" <?= $active_nav === 'reports' ? 'aria-current="page"' : '' ?> href="reports.php">Reports</a></li>
                 <?php endif; ?>

@@ -4,6 +4,11 @@ require_once __DIR__ . '/helpers.php';
 $user = current_user();
 $errors = [];
 
+// ?product=<id>&qty=<n> — product cards and product.php link here so the
+// visitor starts with that product already selected.
+$prefillProduct = max(0, (int) ($_GET['product'] ?? 0));
+$prefillQty     = max(1, min(999, (int) ($_GET['qty'] ?? 1)));
+
 // Clients with branches (only shown to logged-in client accounts).
 $client = null;
 $branches = [];
@@ -40,7 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     keep_old(array_filter([
         'subject' => $subject, 'contact_name' => $contact,
         'contact_phone' => $contactPh, 'contact_email' => $contactEm,
-    ]));
+    ]) + [
+        'product_id'      => $productIds,
+        'quantity'        => $quantities,
+        'warranty_months' => $warranties,
+    ]);
 
     if ($subject === '') $errors[] = 'Please give the quotation a short subject.';
 
@@ -86,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $walkIn = db_fetch_all(
                     "SELECT b.BranchID FROM client_branch b
                      JOIN client c ON c.ClientID = b.ClientID
-                     WHERE c.CompanyName = 'Walk-in / Retail Customers' LIMIT 1"
+                     WHERE c.CompanyName = 'Walk-in Customers' LIMIT 1"
                 );
                 if ($walkIn) {
                     $branchId = (int) $walkIn[0]['BranchID'];
@@ -96,9 +105,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'INSERT INTO client (ClientID, UserID, CompanyName, ContactPerson, Email, Phone, Address)
                          VALUES (:id, NULL, :cn, :cp, :e, NULL, :ad)'
                     )->execute([
-                        ':id' => $walkClientId, ':cn' => 'Walk-in / Retail Customers',
+                        ':id' => $walkClientId, ':cn' => 'Walk-in Customers',
                         ':cp' => $contact !== '' ? $contact : 'Retail Customer',
-                        ':e'  => $contactEm !== '' ? $contactEm : 'retail@sebabd.com',
+                        ':e'  => $contactEm !== '' ? $contactEm : 'sales@sebabd.com',
                         ':ad' => 'Dhaka, Bangladesh',
                     ]);
                     $branchId = next_id($pdo, 'client_branch', 'BranchID');
@@ -107,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                          VALUES (:id, :cid, :bn, :ba, :bc)'
                     )->execute([
                         ':id' => $branchId, ':cid' => $walkClientId,
-                        ':bn' => 'Walk-in Branch', ':ba' => 'Dhaka, Bangladesh',
+                        ':bn' => 'Dhaka Sales Counter', ':ba' => 'Dhaka, Bangladesh',
                         ':bc' => $contactPh !== '' ? $contactPh : null,
                     ]);
                 }
@@ -154,6 +163,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+/* Rebuild the line rows: after a validation error the submitted lines come back
+   from the session, otherwise ?product= fills the first row. Three empty rows
+   are always shown for a first-time visitor. */
+$oldQtys       = old_array('quantity');
+$oldWarranty   = old_array('warranty_months');
+$selectedLines = [];
+foreach (old_array('product_id') as $i => $pid) {
+    $selectedLines[] = [
+        'id'       => (int) $pid,
+        'qty'      => max(1, (int) ($oldQtys[$i] ?? 1)),
+        'warranty' => max(0, (int) ($oldWarranty[$i] ?? 12)),
+    ];
+}
+if (!$selectedLines && $prefillProduct > 0) {
+    $selectedLines = [['id' => $prefillProduct, 'qty' => $prefillQty, 'warranty' => 12]];
+}
+$rowCount = max(3, count($selectedLines));
 
 // A fetch() submit stops here with the error list; a normal submit renders them.
 ajax_errors($errors);
@@ -216,7 +243,12 @@ ajax_errors($errors);
             <h2 class="form-section-title">Products</h2>
             <div class="line-items" data-max-rows="10" data-currency="<?= htmlspecialchars(currency_symbol()) ?>">
               <div class="line-rows">
-                <?php for ($i = 0; $i < 3; $i++): ?>
+                <?php for ($i = 0; $i < $rowCount; $i++): ?>
+                <?php
+                    $pid      = (int) ($selectedLines[$i]['id'] ?? 0);
+                    $qty      = (int) ($selectedLines[$i]['qty'] ?? 1);
+                    $warranty = (int) ($selectedLines[$i]['warranty'] ?? 12);
+                ?>
                 <div class="line-item-row">
                   <div class="line-item-grid">
                     <div class="line-cell line-cell-product">
@@ -236,7 +268,7 @@ ajax_errors($errors);
                         ?>
                         <option value="<?= (int) $p['ProductID'] ?>"
                                 data-price="<?= (float) $p['StandardPrice'] ?>"
-                                data-warranty="<?= (int) $p['DefaultWarrantyMonths'] ?>">
+                                data-warranty="<?= (int) $p['DefaultWarrantyMonths'] ?>" <?= $pid === (int) $p['ProductID'] ? 'selected' : '' ?>>
                           <?= htmlspecialchars($p['ProductName']) ?>
                         </option>
                         <?php endforeach; ?>
@@ -246,11 +278,11 @@ ajax_errors($errors);
                     </div>
                     <div class="line-cell line-cell-qty">
                       <label class="form-label">Qty</label>
-                      <input class="form-control line-qty" type="number" name="quantity[]" min="1" max="999" value="1">
+                      <input class="form-control line-qty" type="number" name="quantity[]" min="1" max="999" value="<?= $qty ?>">
                     </div>
                     <div class="line-cell line-cell-warranty">
                       <label class="form-label">Warranty (months)</label>
-                      <input class="form-control line-warranty" type="number" name="warranty_months[]" min="0" max="120" value="12">
+                      <input class="form-control line-warranty" type="number" name="warranty_months[]" min="0" max="120" value="<?= $warranty ?>">
                     </div>
                     <div class="line-cell line-cell-total">
                       <label class="form-label">Line total</label>
@@ -316,7 +348,7 @@ ajax_errors($errors);
 
             <div class="totals-box">
               <div class="d-flex justify-content-between align-items-center">
-                <span class="text-muted">Grand total (<span id="line-count">3</span> lines)</span>
+                <span class="text-muted">Grand total (<span id="line-count"><?= $rowCount ?></span> lines)</span>
                 <span class="price h5 mb-0" id="grand-total"><?= money(0) ?></span>
                 <?php if (!$client): ?>
                 <small class="text-muted d-block w-100">Signed-in clients get branch-linked quotations and corporate pricing.</small>

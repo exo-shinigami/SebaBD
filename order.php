@@ -4,6 +4,11 @@ require_once __DIR__ . '/helpers.php';
 $user = require_login('order.php');
 $errors = [];
 
+// ?product=<id>&qty=<n> — product cards and product.php link here so the
+// visitor starts with that product already selected.
+$prefillProduct = max(0, (int) ($_GET['product'] ?? 0));
+$prefillQty     = max(1, min(999, (int) ($_GET['qty'] ?? 1)));
+
 $catalog = db_fetch_all(
     'SELECT p.ProductID, p.ProductName, p.StandardPrice, p.StockQty, p.IsSerialized, c.CategoryName
      FROM product p JOIN category c ON c.CategoryID = p.CategoryID
@@ -15,7 +20,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $productIds = array_map('intval', $_POST['product_id'] ?? []);
     $quantities = array_map('intval', $_POST['quantity'] ?? []);
 
-    keep_old(['shipping_address' => $shipping]);
+    keep_old([
+        'shipping_address' => $shipping,
+        'product_id'       => $productIds,
+        'quantity'         => $quantities,
+    ]);
 
     if (mb_strlen($shipping) < 10) {
         $errors[] = 'Please enter a full delivery address (street, area, city).';
@@ -85,6 +94,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+/* Rebuild the line rows: after a validation error the submitted lines come back
+   from the session, otherwise ?product= fills the first row. Two empty rows are
+   always shown so the form looks the same for a first-time visitor. */
+$oldQtys       = old_array('quantity');
+$selectedLines = [];
+foreach (old_array('product_id') as $i => $pid) {
+    $selectedLines[] = ['id' => (int) $pid, 'qty' => max(1, (int) ($oldQtys[$i] ?? 1))];
+}
+if (!$selectedLines && $prefillProduct > 0) {
+    $selectedLines = [['id' => $prefillProduct, 'qty' => $prefillQty]];
+}
+$rowCount = max(2, count($selectedLines));
+
 // A fetch() submit stops here with the error list; a normal submit renders them.
 ajax_errors($errors);
 ?>
@@ -121,7 +143,8 @@ ajax_errors($errors);
             <h2 class="form-section-title">Products</h2>
             <div class="line-items" data-max-rows="10" data-currency="<?= htmlspecialchars(currency_symbol()) ?>">
               <div class="line-rows">
-                <?php for ($i = 0; $i < 2; $i++): ?>
+                <?php for ($i = 0; $i < $rowCount; $i++): ?>
+                <?php $pid = (int) ($selectedLines[$i]['id'] ?? 0); $qty = (int) ($selectedLines[$i]['qty'] ?? 1); ?>
                 <div class="line-item-row">
                   <div class="line-item-grid">
                     <div class="line-cell line-cell-product">
@@ -137,7 +160,7 @@ ajax_errors($errors);
                             }
                             $stockTag = ((int) $p['IsSerialized']) === 0 && (int) $p['StockQty'] <= 5 && (int) $p['StockQty'] > 0 ? ' — low stock' : '';
                         ?>
-                        <option value="<?= (int) $p['ProductID'] ?>" data-price="<?= (float) $p['StandardPrice'] ?>">
+                        <option value="<?= (int) $p['ProductID'] ?>" data-price="<?= (float) $p['StandardPrice'] ?>" <?= $pid === (int) $p['ProductID'] ? 'selected' : '' ?>>
                           <?= htmlspecialchars($p['ProductName']) . $stockTag ?>
                         </option>
                         <?php endforeach; ?>
@@ -147,7 +170,7 @@ ajax_errors($errors);
                     </div>
                     <div class="line-cell line-cell-qty">
                       <label class="form-label">Qty</label>
-                      <input class="form-control line-qty" type="number" name="quantity[]" min="1" max="999" value="1">
+                      <input class="form-control line-qty" type="number" name="quantity[]" min="1" max="999" value="<?= $qty ?>">
                     </div>
                     <div class="line-cell line-cell-total">
                       <label class="form-label">Line total</label>
@@ -206,7 +229,7 @@ ajax_errors($errors);
 
             <div class="totals-box">
               <div class="d-flex justify-content-between align-items-center">
-                <span class="text-muted">Order total (<span id="line-count">2</span> lines)</span>
+                <span class="text-muted">Order total (<span id="line-count"><?= $rowCount ?></span> lines)</span>
                 <span class="price h5 mb-0" id="grand-total"><?= money(0) ?></span>
               </div>
               <small class="text-muted d-block mt-1">Payment is collected on delivery or via bank transfer — an invoice will be issued for this order.</small>

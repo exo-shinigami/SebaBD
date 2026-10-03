@@ -37,9 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Passwords do not match.';
     }
 
-    // `role` 4 = "Client Account" and is the only self-service role; the staff
-    // roles (Admin, Sales Manager, Inventory Manager) are assigned by an admin.
-    $roleId = 4;
+    // Public retail registration is the only self-service path for this role.
+    $roleId = ROLE_CLIENT_ACCOUNT;
 
     $pdo = db();
     if (!$pdo) {

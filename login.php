@@ -5,8 +5,7 @@ $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identifier = trim($_POST['identifier'] ?? '');
-    $password   = $_POST['password'] ?? '';
-    $next       = $_POST['next'] ?? 'index.php';
+    $password   = $_POST['password'] ?? '';        $next       = $_POST['next'] ?? 'dashboard.php';
 
     keep_old(['identifier' => $identifier]);
 
@@ -32,14 +31,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash_set('success', 'Signed in as ' . $rows[0]['FullName'] . '.');
             // Only allow internal redirects. AJAX callers receive the same
             // target inside the JSON reply and navigate themselves.
-            $target = str_starts_with($next, '/') || !str_contains($next, '://') ? $next : 'index.php';
+            $target = str_starts_with($next, '/') || !str_contains($next, '://') ? $next : 'dashboard.php';
             post_success($target);
         }
         $errors[] = 'Invalid credentials — check your username/email and password.';
     }
-    $next = $_POST['next'] ?? 'index.php';
+    $next = $_POST['next'] ?? 'dashboard.php';
 } else {
-    $next = $_GET['next'] ?? 'index.php';
+    $next = $_GET['next'] ?? 'dashboard.php';
 }
 
 // A fetch() submit stops here with the error list; a normal submit renders them.
@@ -89,9 +88,6 @@ ajax_errors($errors);
             </div>
           </form>
 
-          <div class="form-note mt-3">
-            <i class="fa-solid fa-flask me-2"></i>Demo logins — <code>admin_john/admin123</code>, <code>sales_sarah/sales123</code>, <code>inv_mike/stock123</code>, <code>client_acme/client123</code>
-          </div>
         </div>
       </div>
     </div>

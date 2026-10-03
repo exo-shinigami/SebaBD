@@ -50,8 +50,8 @@ foreach ($products as $product) {
         'warranty_months'  => (int) $product['DefaultWarrantyMonths'],
         'image'            => $product['image'] ?? null,
         'blurb'            => $product['blurb'] ?? '',
-        // Searching for the exact name lands the visitor on that one card.
-        'url'              => 'index.php?q=' . rawurlencode($product['ProductName']) . '#featured-products',
+        // Suggestions open the product's own detail page.
+        'url'              => 'product.php?id=' . (int) $product['ProductID'],
     ];
 }
 

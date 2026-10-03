@@ -71,10 +71,10 @@ CREATE TABLE `client` (
 --
 
 INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Email`, `Phone`, `Address`) VALUES
-(1, 4, 'Acme Corporation', 'Alice Smith', 'contact@acmecorp.com', '+15550104', '100 Industrial Pkwy, Sector 4'),
-(2, NULL, 'Global Logistics Ltd', 'Bob Vance', 'bob@globallogistics.com', '+15550105', '452 Ocean Drive, Suite 12'),
-(3, NULL, 'Apex Technologies', 'Charlie Kelly', 'charlie@apextech.io', '+15550106', '88 Innovation Way'),
-(4, NULL, 'Starlight Retail', 'Diana Prince', 'diana@starlight.com', '+15550107', '212 Market Plaza');
+(1, 4, 'Meghna Infotech Ltd', 'Farhana Rahman', 'contact@meghnainfotech.com', '+880 1711 100104', 'Plot 12, Road 5, Banani, Dhaka 1213'),
+(2, NULL, 'Karnaphuli Logistics Ltd', 'Shariful Islam', 'info@karnaphulilogistics.com', '+880 1811 100105', 'Holding 45, Agrabad C/A, Chattogram 4100'),
+(3, NULL, 'Bijoy Technologies Ltd', 'Arif Hossain', 'arif@bijoytech.com', '+880 1911 100106', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215'),
+(4, NULL, 'Bright Computer Mart', 'Nazmul Hasan', 'sales@brightcomputermart.com', '+880 1611 100107', 'Shop 212, New Market, Mirpur Road, Dhaka 1205');
 
 -- --------------------------------------------------------
 
@@ -95,10 +95,10 @@ CREATE TABLE `client_branch` (
 --
 
 INSERT INTO `client_branch` (`BranchID`, `ClientID`, `BranchName`, `BranchAddress`, `ContactNo`) VALUES
-(1, 1, 'Acme - HQ', '100 Industrial Pkwy, Sector 4', '+15550104'),
-(2, 1, 'Acme - West Coast', '89 Bayfront Blvd, San Francisco, CA', '+15550110'),
-(3, 2, 'Global Logistics - Main Hub', '452 Ocean Drive, Suite 12', '+15550105'),
-(4, 3, 'Apex Tech - R&D Facility', '88 Innovation Way, Building B', '+15550106');
+(1, 1, 'Meghna Infotech - Head Office', 'Plot 12, Road 5, Banani, Dhaka 1213', '+880 1711 100104'),
+(2, 1, 'Meghna Infotech - Uttara Branch', 'House 7, Sector 4, Uttara, Dhaka 1230', '+880 1711 100110'),
+(3, 2, 'Karnaphuli Logistics - Main Hub', 'Holding 45, Agrabad C/A, Chattogram 4100', '+880 1811 100105'),
+(4, 3, 'Bijoy Technologies - Panthapath Office', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215', '+880 1911 100106');
 
 -- --------------------------------------------------------
 
@@ -123,10 +123,10 @@ CREATE TABLE `invoice` (
 --
 
 INSERT INTO `invoice` (`InvoiceNo`, `BranchID`, `QuotationNo`, `OrderID`, `InvoiceDate`, `PaymentStatus`, `TotalAmount`, `RemainingBalance`, `AmountInWords`) VALUES
-(5001, 1, 1001, NULL, '2024-02-12', 'PARTIAL', 3500.00, 1500.00, 'Three Thousand Five Hundred Dollars'),
-(5002, 3, 1003, NULL, '2024-02-22', 'PAID', 5100.00, 0.00, 'Five Thousand One Hundred Dollars'),
-(5003, 1, NULL, 1, '2024-03-01', 'DUE', 1750.00, 1750.00, 'One Thousand Seven Hundred Fifty Dollars'),
-(5004, 4, NULL, 4, '2024-03-12', 'PAID', 2400.00, 0.00, 'Two Thousand Four Hundred Dollars');
+(5001, 1, 1001, NULL, '2024-02-12', 'PARTIAL', 420000.00, 120000.00, 'Four Hundred Twenty Thousand Taka'),
+(5002, 3, 1003, NULL, '2024-02-22', 'PAID', 612000.00, 0.00, 'Six Hundred Twelve Thousand Taka'),
+(5003, 1, NULL, 1, '2024-03-01', 'DUE', 210000.00, 210000.00, 'Two Hundred Ten Thousand Taka'),
+(5004, 4, NULL, 4, '2024-03-12', 'PAID', 288000.00, 0.00, 'Two Hundred Eighty Eight Thousand Taka');
 
 -- --------------------------------------------------------
 
@@ -149,10 +149,14 @@ CREATE TABLE `invoice_item` (
 --
 
 INSERT INTO `invoice_item` (`InvoiceItemID`, `InvoiceNo`, `ProductID`, `EquipmentID`, `Quantity`, `SoldUnitPrice`, `TotalPrice`) VALUES
-(1, 5001, 1, 1, 1, 1200.00, 1200.00),
-(2, 5001, 2, NULL, 2, 550.00, 1100.00),
-(3, 5002, 3, 4, 1, 850.00, 850.00),
-(4, 5003, 1, 2, 1, 1200.00, 1200.00);
+(1, 5001, 1, 1, 1, 144000.00, 144000.00),
+(2, 5001, 2, NULL, 2, 66000.00, 132000.00),
+(3, 5002, 3, 4, 1, 102000.00, 102000.00),
+(4, 5003, 1, 2, 1, 144000.00, 144000.00),
+(5, 5001, 1, NULL, 1, 144000.00, 144000.00),
+(6, 5002, 3, NULL, 5, 102000.00, 510000.00),
+(7, 5003, 2, NULL, 1, 66000.00, 66000.00),
+(8, 5004, 1, NULL, 2, 144000.00, 288000.00);
 
 -- --------------------------------------------------------
 
@@ -174,10 +178,10 @@ CREATE TABLE `order` (
 --
 
 INSERT INTO `order` (`OrderID`, `UserID`, `OrderDate`, `TotalAmount`, `OrderStatus`, `ShippingAddress`) VALUES
-(1, 2, '2024-03-01 10:15:00', 1750.00, 'Completed', '100 Industrial Pkwy, Sector 4'),
-(2, 2, '2024-03-05 14:30:00', 1100.00, 'Processing', '452 Ocean Drive, Suite 12'),
-(3, 1, '2024-03-10 09:00:00', 199.98, 'Pending', '88 Innovation Way'),
-(4, 2, '2024-03-12 16:45:00', 2400.00, 'Completed', '212 Market Plaza');
+(1, 2, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Plot 12, Road 5, Banani, Dhaka 1213'),
+(2, 2, '2024-03-05 14:30:00', 132000.00, 'Processing', 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
+(3, 1, '2024-03-10 09:00:00', 24000.00, 'Pending', 'Flat 4B, Green Road, Dhaka 1205'),
+(4, 2, '2024-03-12 16:45:00', 288000.00, 'Completed', 'Holding 9, Agrabad C/A, Chattogram 4100');
 
 -- --------------------------------------------------------
 
@@ -199,10 +203,11 @@ CREATE TABLE `order_item` (
 --
 
 INSERT INTO `order_item` (`OrderItemID`, `OrderID`, `ProductID`, `Quantity`, `UnitPrice`, `TotalPrice`) VALUES
-(1, 1, 1, 1, 1200.00, 1200.00),
-(2, 1, 2, 1, 550.00, 550.00),
-(3, 2, 2, 2, 550.00, 1100.00),
-(4, 3, 4, 2, 99.99, 199.98);
+(1, 1, 1, 1, 144000.00, 144000.00),
+(2, 1, 2, 1, 66000.00, 66000.00),
+(3, 2, 2, 2, 66000.00, 132000.00),
+(4, 3, 4, 2, 12000.00, 24000.00),
+(5, 4, 1, 2, 144000.00, 288000.00);
 
 -- --------------------------------------------------------
 
@@ -225,10 +230,10 @@ CREATE TABLE `payment_receipt` (
 --
 
 INSERT INTO `payment_receipt` (`ReceiptNo`, `InvoiceNo`, `ReceiptDate`, `AmountReceived`, `PaymentMethod`, `RemainingDueAfterReceipt`, `ReceivedBy`) VALUES
-(8001, 5001, '2024-02-15', 2000.00, 'Bank Transfer', 1500.00, 'Sarah Jenkins'),
-(8002, 5002, '2024-02-25', 5100.00, 'Credit Card', 0.00, 'Sarah Jenkins'),
-(8003, 5004, '2024-03-12', 2400.00, 'Bank Transfer', 0.00, 'John Doe'),
-(8004, 5001, '2024-03-15', 500.00, 'Check', 1000.00, 'Sarah Jenkins');
+(8001, 5001, '2024-02-15', 240000.00, 'Bank Transfer', 180000.00, 'Nusrat Jahan'),
+(8002, 5002, '2024-02-25', 612000.00, 'Credit Card', 0.00, 'Nusrat Jahan'),
+(8003, 5004, '2024-03-12', 288000.00, 'bKash', 0.00, 'Mahmudul Hasan'),
+(8004, 5001, '2024-03-15', 60000.00, 'Cheque', 120000.00, 'Nusrat Jahan');
 
 -- --------------------------------------------------------
 
@@ -250,10 +255,10 @@ CREATE TABLE `po_item` (
 --
 
 INSERT INTO `po_item` (`POItemID`, `PONo`, `ProductID`, `Quantity`, `WholesaleUnitPrice`, `TotalPrice`) VALUES
-(1, 9001, 1, 10, 1000.00, 10000.00),
-(2, 9002, 2, 20, 450.00, 9000.00),
-(3, 9003, 3, 10, 700.00, 7000.00),
-(4, 9004, 4, 50, 75.00, 3750.00);
+(1, 9001, 1, 10, 120000.00, 1200000.00),
+(2, 9002, 2, 20, 54000.00, 1080000.00),
+(3, 9003, 3, 10, 84000.00, 840000.00),
+(4, 9004, 4, 50, 9000.00, 450000.00);
 
 -- --------------------------------------------------------
 
@@ -279,10 +284,10 @@ CREATE TABLE `product` (
 --
 
 INSERT INTO `product` (`ProductID`, `CategoryID`, `VendorID`, `ProductName`, `Brand`, `Model`, `StandardPrice`, `IsSerialized`, `StockQty`, `DefaultWarrantyMonths`) VALUES
-(1, 1, 1, 'ProBook Enterprise 15', 'HP', 'PB-15-2024', 1200.00, 1, 0, 24),
-(2, 2, 2, 'UltraSharp 27\" 4K Monitor', 'Dell', 'U2723QE', 550.00, 0, 45, 12),
-(3, 3, 3, 'Enterprise Managed Switch 24-Port', 'Cisco', 'CBS350-24T', 850.00, 1, 0, 36),
-(4, 4, 4, 'Ergonomic Wireless Mouse', 'Logitech', 'MX-Master-3S', 99.99, 0, 120, 12);
+(1, 1, 1, 'ProBook 450 G10', 'HP', '450 G10', 144000.00, 1, 0, 24),
+(2, 2, 2, 'UltraSharp 27\" 4K Monitor', 'Dell', 'U2723QE', 66000.00, 0, 45, 12),
+(3, 3, 3, 'CBS350-24T 24-Port Managed Switch', 'Cisco', 'CBS350-24T', 102000.00, 1, 0, 36),
+(4, 4, 4, 'MX Master 3S Wireless Mouse', 'Logitech', 'MX Master 3S', 12000.00, 0, 120, 12);
 
 -- --------------------------------------------------------
 
@@ -305,10 +310,10 @@ CREATE TABLE `product_instance` (
 --
 
 INSERT INTO `product_instance` (`EquipmentID`, `ProductID`, `SerialNumber`, `PurchaseDate`, `VendorWarrantyExpiry`, `ClientWarrantyExpiry`, `Status`) VALUES
-(1, 1, 'SN-HP-PB15-001', '2024-01-15', '2026-01-15', '2026-01-15', 'In Stock'),
-(2, 1, 'SN-HP-PB15-002', '2024-01-15', '2026-01-15', '2026-01-15', 'In Stock'),
-(3, 3, 'SN-CS-350-101', '2024-02-01', '2027-02-01', '2027-02-01', 'In Stock'),
-(4, 3, 'SN-CS-350-102', '2024-02-01', '2027-02-01', '2027-02-01', 'Sold');
+(1, 1, '5CG1427W9K', '2024-01-15', '2026-01-15', '2026-01-15', 'In Stock'),
+(2, 1, '5CG1427W9L', '2024-01-15', '2026-01-15', '2026-01-15', 'In Stock'),
+(3, 3, 'FOC2341X0AB', '2024-02-01', '2027-02-01', '2027-02-01', 'In Stock'),
+(4, 3, 'FOC2341X0AC', '2024-02-01', '2027-02-01', '2027-02-01', 'Sold');
 
 -- --------------------------------------------------------
 
@@ -329,10 +334,10 @@ CREATE TABLE `purchase_order` (
 --
 
 INSERT INTO `purchase_order` (`PONo`, `VendorID`, `PODate`, `TotalAmount`, `Terms`) VALUES
-(9001, 1, '2024-01-05', 12000.00, 'Net 30'),
-(9002, 2, '2024-01-10', 11000.00, 'Net 15'),
-(9003, 3, '2024-01-20', 8500.00, 'Net 30'),
-(9004, 4, '2024-02-01', 5000.00, 'Immediate');
+(9001, 1, '2024-01-05', 1200000.00, 'Net 30'),
+(9002, 2, '2024-01-10', 1080000.00, 'Net 15'),
+(9003, 3, '2024-01-20', 840000.00, 'Net 30'),
+(9004, 4, '2024-02-01', 450000.00, 'Immediate');
 
 -- --------------------------------------------------------
 
@@ -355,10 +360,10 @@ CREATE TABLE `quotation` (
 --
 
 INSERT INTO `quotation` (`QuotationNo`, `BranchID`, `QuotationDate`, `Subject`, `TotalAmount`, `AmountInWords`, `Status`) VALUES
-(1001, 1, '2024-02-10', 'Office IT Upgrade Proposal', 3500.00, 'Three Thousand Five Hundred Dollars', 'Accepted'),
-(1002, 2, '2024-02-15', 'Branch Expansion Equipment', 2200.00, 'Two Thousand Two Hundred Dollars', 'Pending'),
-(1003, 3, '2024-02-20', 'Network Infrastructure Setup', 5100.00, 'Five Thousand One Hundred Dollars', 'Accepted'),
-(1004, 4, '2024-02-25', 'Peripherals Order', 499.95, 'Four Hundred Ninety Nine Dollars and Ninety Five Cents', 'Rejected');
+(1001, 1, '2024-02-10', 'Office IT Upgrade Proposal', 420000.00, 'Four Hundred Twenty Thousand Taka', 'Accepted'),
+(1002, 2, '2024-02-15', 'Branch Expansion Equipment', 144000.00, 'One Hundred Forty Four Thousand Taka', 'Pending'),
+(1003, 3, '2024-02-20', 'Network Infrastructure Setup', 612000.00, 'Six Hundred Twelve Thousand Taka', 'Accepted'),
+(1004, 4, '2024-02-25', 'Peripherals Order', 60000.00, 'Sixty Thousand Taka', 'Rejected');
 
 -- --------------------------------------------------------
 
@@ -381,10 +386,11 @@ CREATE TABLE `quotation_item` (
 --
 
 INSERT INTO `quotation_item` (`QuotationItemID`, `QuotationNo`, `ProductID`, `Quantity`, `UnitPrice`, `TotalPrice`, `WarrantyMonths`) VALUES
-(1, 1001, 1, 2, 1200.00, 2400.00, 24),
-(2, 1001, 2, 2, 550.00, 1100.00, 12),
-(3, 1002, 1, 1, 1200.00, 1200.00, 24),
-(4, 1003, 3, 6, 850.00, 5100.00, 36);
+(1, 1001, 1, 2, 144000.00, 288000.00, 24),
+(2, 1001, 2, 2, 66000.00, 132000.00, 12),
+(3, 1002, 1, 1, 144000.00, 144000.00, 24),
+(4, 1003, 3, 6, 102000.00, 612000.00, 36),
+(5, 1004, 4, 5, 12000.00, 60000.00, 12);
 
 -- --------------------------------------------------------
 
@@ -404,6 +410,7 @@ CREATE TABLE `role` (
 INSERT INTO `role` (`RoleID`, `RoleName`) VALUES
 (1, 'Admin'),
 (4, 'Client Account'),
+(5, 'B2B Client Account'),
 (3, 'Inventory Manager'),
 (2, 'Sales Manager');
 
@@ -429,10 +436,10 @@ CREATE TABLE `user` (
 --
 
 INSERT INTO `user` (`UserID`, `RoleID`, `Username`, `PasswordHash`, `Email`, `FullName`, `Phone`, `CreatedAt`) VALUES
-(1, 1, 'admin_john', '$2a$12$eImiTXuWVxfM37uY4JANjOL.8/E/C9G..a.u.s.e.r.1', 'john.admin@company.com', 'John Doe', '+15550101', '2026-09-25 12:37:17'),
-(2, 2, 'sales_sarah', '$2a$12$eImiTXuWVxfM37uY4JANjOL.8/E/C9G..a.u.s.e.r.2', 'sarah.sales@company.com', 'Sarah Jenkins', '+15550102', '2026-09-25 12:37:17'),
-(3, 3, 'inv_mike', '$2a$12$eImiTXuWVxfM37uY4JANjOL.8/E/C9G..a.u.s.e.r.3', 'mike.inv@company.com', 'Michael Chang', '+15550103', '2026-09-25 12:37:17'),
-(4, 4, 'client_acme', '$2a$12$eImiTXuWVxfM37uY4JANjOL.8/E/C9G..a.u.s.e.r.4', 'contact@acmecorp.com', 'Alice Smith', '+15550104', '2026-09-25 12:37:17');
+(1, 1, 'admin', '$2y$10$sg9qJdZ9Z48VVpM45KJIuOVW.LzNERCltRXHbTPsl/wSpFtIBSD16', 'mahmudul.hasan@sebabd.com', 'Mahmudul Hasan', '+880 1711 100101', '2026-09-25 12:37:17'),
+(2, 2, 'sales', '$2y$10$ngPNRoDB.3UT5gHmj4XJtuOfSFvrhCYFanBJNle2gqCuC7eN9Y/l.', 'nusrat.jahan@sebabd.com', 'Nusrat Jahan', '+880 1811 100102', '2026-09-25 12:37:17'),
+(3, 3, 'inventory', '$2y$10$Ia.o8s6YeAmeFh1yNGSbhe7XNnU2q1ZXOmK.CrjUNcJCA0L6EFrzq', 'tanvir.ahmed@sebabd.com', 'Tanvir Ahmed', '+880 1911 100103', '2026-09-25 12:37:17'),
+(4, 5, 'client', '$2y$10$wsOwK/s2pfikbrjdlSz/P.ECSf/9q4VCeBLIOo8O9g.3ttgzKIf0y', 'contact@meghnainfotech.com', 'Farhana Rahman', '+880 1711 100104', '2026-09-25 12:37:17');
 
 -- --------------------------------------------------------
 
@@ -452,10 +459,10 @@ CREATE TABLE `vendor` (
 --
 
 INSERT INTO `vendor` (`VendorID`, `VendorName`, `Location`, `ContactPhone`) VALUES
-(1, 'TechDistro Global', 'New York, NY', '+15550201'),
-(2, 'Silicon Supply Co', 'San Jose, CA', '+15550202'),
-(3, 'NetGear Wholesale', 'Austin, TX', '+15550203'),
-(4, 'OmniComponents Inc', 'Chicago, IL', '+15550204');
+(1, 'Nexus Digital Distribution Pte Ltd', 'Singapore', '+65 6011 0201'),
+(2, 'Yuanhe Electronics Co., Ltd', 'Shenzhen, China', '+86 755 8021 0202'),
+(3, 'Gulf Micro Trading LLC', 'Dubai, UAE', '+971 4 201 0203'),
+(4, 'Techno Parts Sdn Bhd', 'Kuala Lumpur, Malaysia', '+60 3 2011 0204');
 
 --
 -- Indexes for dumped tables

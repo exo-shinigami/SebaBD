@@ -226,24 +226,6 @@ a {
     color: #fff;
 }
 
-.newsletter-form .form-control {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
-    color: #fff;
-    min-width: 0;
-}
-
-.newsletter-form .form-control::placeholder {
-    color: rgba(255, 255, 255, 0.5);
-}
-
-.newsletter-form .form-control:focus {
-    background: rgba(255, 255, 255, 0.12);
-    color: #fff;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 0.2rem rgba(14, 165, 181, 0.25);
-}
-
 .footer-bar .social-link {
     width: 2.2rem;
     height: 2.2rem;
@@ -782,4 +764,107 @@ form.is-busy button[type="submit"]::after {
     opacity: 0.5;
     pointer-events: none;
     transition: opacity 0.15s ease;
+}
+
+/* ------------------------------------------------------ product detail */
+
+.crumb a {
+    color: var(--accent-strong);
+    text-decoration: none;
+}
+
+.crumb a:hover {
+    text-decoration: underline;
+}
+
+.product-detail-media {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1.25rem;
+    box-shadow: 0 18px 40px rgba(28, 36, 48, 0.07);
+    padding: 1.25rem;
+}
+
+.product-detail-media img {
+    display: block;
+    width: 100%;
+    border-radius: 0.75rem;
+    object-fit: cover;
+}
+
+.product-detail-badge {
+    position: absolute;
+    top: 1.75rem;
+    left: 1.75rem;
+}
+
+.price-lg {
+    font-size: 1.9rem;
+    font-weight: 800;
+}
+
+.spec-table th {
+    width: 38%;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.spec-table td {
+    color: var(--text-main);
+}
+
+.product-title-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.product-title-link:hover {
+    color: var(--accent-strong);
+}
+
+/* ---------------------------------------------------------- dashboard */
+
+.dash-list li {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(28, 36, 48, 0.08);
+}
+
+.dash-list li:first-child {
+    padding-top: 0;
+}
+
+.dash-list li:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.dash-table .dash-group th {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    background: var(--surface-soft);
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+}
+
+.dash-table-name code {
+    color: var(--surface-strong);
+}
+
+.dash-dl dt {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.dash-dl dd {
+    margin-bottom: 0.45rem;
+    color: var(--text-main);
 }

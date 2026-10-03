@@ -59,15 +59,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
 
-                // Optional linked user account (role 4 = Client Account).
+                // Optional linked user account for the corporate customer role.
                 $linkUserId = null;
                 if ($createLogin) {
                     $linkUserId = next_id($pdo, 'user', 'UserID');
                     $pdo->prepare(
                         'INSERT INTO `user` (UserID, RoleID, Username, PasswordHash, Email, FullName, Phone)
-                         VALUES (:id, 4, :u, :p, :e, :f, :ph)'
+                       VALUES (:id, :role, :u, :p, :e, :f, :ph)'
                     )->execute([
-                        ':id' => $linkUserId, ':u' => $username,
+                      ':id' => $linkUserId, ':role' => ROLE_B2B_CLIENT_ACCOUNT, ':u' => $username,
                         ':p'  => password_hash($password, PASSWORD_DEFAULT),
                         ':e'  => $email, ':f' => $contactPerson, ':ph' => $phone ?: null,
                     ]);
