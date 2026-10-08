@@ -28,6 +28,7 @@
                   <li><a href="register.php">Create account</a></li>
                   <?php endif; ?>
                   <?php if (is_staff_user()): ?>
+                  <li><a href="admin.php">Back office</a></li>
                   <li><a href="reports.php">Reports</a></li>
                   <?php endif; ?>
                 </ul>
@@ -43,6 +44,10 @@
           </div>
         </footer>
       </div>
+
+      <!-- Confirmation strip for actions that happen without a page load
+           (adding to the basket). Announced to screen readers politely. -->
+      <div class="site-toast" id="site-toast" role="status" aria-live="polite"></div>
 
       <!-- bootstrap js link  -->
       <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>

@@ -7,6 +7,21 @@
  * fall back to the offline catalogue and still render.
  */
 
+/**
+ * Verbose diagnostics switch. Every page that reports a database or write
+ * failure reads this constant, so it is defined here — the lowest-level
+ * include, loaded by db.php's own callers and by helpers.php — with a safe
+ * default of off.
+ *
+ * To see raw MySQL error text while developing, add this as the first line of
+ * your local config.php (see config.example.php):
+ *
+ *     define('APP_DEBUG', true);
+ */
+if (!defined('APP_DEBUG')) {
+    define('APP_DEBUG', false);
+}
+
 function db(): ?PDO
 {
     static $pdo = null;

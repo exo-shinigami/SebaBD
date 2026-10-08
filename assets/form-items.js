@@ -3,12 +3,17 @@
  * Works with this structure:
  *   <div class="line-items" data-max-rows="10">
  *     <div class="line-item-row"> select.line-product (options carry
- *       data-price / data-warranty), input.line-qty, [input.line-warranty],
- *       <span class="line-total">, button.remove-row </div> ...
+ *       data-price / data-warranty), input.line-qty, [input.line-price],
+ *       [input.line-warranty], <span class="line-total">, button.remove-row
+ *     </div> ...
  *     <template id="line-item-template"> …one .line-item-row… </template>
  *     <button class="add-row">
  *   </div>
  *   <span id="grand-total">
+ *
+ * A row may carry its own `.line-price` input (staff quotations pick their own
+ * price). When one is present it wins over the option's data-price, which is
+ * what the customer-facing forms rely on.
  */
 (function () {
     'use strict';
@@ -21,12 +26,21 @@
         });
     }
 
-    function rowTotal(row) {
+    // Price for one row: an explicit .line-price input when the form has one,
+    // otherwise the selected option's data-price.
+    function rowPrice(row) {
+        const priceField = row.querySelector('.line-price');
+        if (priceField && priceField.value !== '') {
+            return parseFloat(priceField.value) || 0;
+        }
         const sel = row.querySelector('.line-product');
-        const qty = parseInt(row.querySelector('.line-qty').value, 10) || 0;
-        const price = parseFloat(sel && sel.selectedOptions[0]
+        return parseFloat(sel && sel.selectedOptions[0]
             ? sel.selectedOptions[0].dataset.price || 0 : 0);
-        return qty * price;
+    }
+
+    function rowTotal(row) {
+        const qty = parseInt(row.querySelector('.line-qty').value, 10) || 0;
+        return qty * rowPrice(row);
     }
 
     function refresh(container) {
@@ -50,9 +64,18 @@
             const opt = sel.selectedOptions[0];
             const w = row.querySelector('.line-warranty');
             if (w && opt && opt.dataset.warranty) w.value = opt.dataset.warranty;
+            // Keep an editable price in step with the product that was picked,
+            // but never overwrite a price the user typed for the same product.
+            const p = row.querySelector('.line-price');
+            if (p && opt && opt.dataset.price !== undefined && row.dataset.priceProduct !== sel.value) {
+                p.value = opt.dataset.price || '0.00';
+                row.dataset.priceProduct = sel.value;
+            }
             refresh(container);
         });
         row.querySelector('.line-qty').addEventListener('input', () => refresh(container));
+        const p = row.querySelector('.line-price');
+        if (p) p.addEventListener('input', () => refresh(container));
         const w = row.querySelector('.line-warranty');
         if (w) w.addEventListener('input', () => refresh(container));
         row.querySelector('.remove-row').addEventListener('click', () => {

@@ -243,21 +243,9 @@ function report_date(?string $value): string
 /* ------------------------------------------------------- page helpers */
 
 /**
- * One KPI tile. $value is already formatted/escaped by the caller.
+ * report_kpi() itself lives in helpers.php, because the back office and the
+ * dashboard render their figures with the same tile as the reports.
  */
-function report_kpi(string $label, string $value, string $hint = '', string $icon = ''): string
-{
-    $iconHtml = $icon !== ''
-        ? '<span class="report-kpi-icon"><i class="fa-solid ' . htmlspecialchars($icon) . '"></i></span>'
-        : '';
-
-    return '<div class="col-6 col-xl-3"><div class="report-kpi">'
-        . $iconHtml
-        . '<span class="report-kpi-label">' . htmlspecialchars($label) . '</span>'
-        . '<span class="report-kpi-value">' . $value . '</span>'
-        . ($hint !== '' ? '<span class="report-kpi-hint">' . htmlspecialchars($hint) . '</span>' : '')
-        . '</div></div>';
-}
 
 /**
  * Standard heading block for a panel inside a report.

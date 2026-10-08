@@ -4,6 +4,8 @@ require_once __DIR__ . '/helpers.php';
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_guard('register.php');
+
     $fullName = trim($_POST['full_name'] ?? '');
     $username = trim($_POST['username'] ?? '');
     $email    = trim($_POST['email'] ?? '');
@@ -115,6 +117,7 @@ ajax_errors($errors);
           </div>
 
           <form method="post" action="register.php" novalidate data-ajax data-check-account>
+            <?= csrf_field() ?>
             <div class="row g-3">
               <div class="col-12">
                 <label class="form-label" for="full_name">Full name <span class="req">*</span></label>

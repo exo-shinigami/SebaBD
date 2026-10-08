@@ -2,9 +2,13 @@
 /**
  * SebaBD — shared page header. Expects (optional) variables set by the page:
  *   $page_title  — text appended after the site name
- *   $active_nav  — one of: home, shop, categories, deals, contact, reports
+ *   $active_nav  — one of: home, shop, categories, deals, contact, reports,
+ *                  dashboard, account, admin
  */
 require_once dirname(__DIR__) . '/helpers.php';
+// The basket count in the nav comes from the session, so every page that draws
+// the header can show it without loading the cart page.
+require_once dirname(__DIR__) . '/cart-data.php';
 $page_title = $page_title ?? '';
 $active_nav = $active_nav ?? '';
 $user = current_user();
@@ -31,7 +35,10 @@ $user = current_user();
             <span class="small text-white-50"><i class="fa-solid fa-truck-fast me-2"></i>Nationwide delivery all over Bangladesh</span>
             <div class="d-flex gap-3 small">
               <?php if ($user): ?>
-              <span class="text-white-50"><i class="fa-solid fa-user me-1"></i><?= htmlspecialchars($user['FullName']) ?> (<?= htmlspecialchars($user['RoleName']) ?>)</span>
+              <a class="text-decoration-none text-white" href="account.php" title="My account"><i class="fa-solid fa-user me-1"></i><?= htmlspecialchars($user['FullName']) ?> (<?= htmlspecialchars($user['RoleName']) ?>)</a>
+              <?php if (is_staff_user($user)): ?>
+              <a class="text-decoration-none text-white" href="admin.php"><i class="fa-solid fa-sliders me-1"></i>Back office</a>
+              <?php endif; ?>
               <a class="text-decoration-none text-white" href="logout.php">Logout</a>
               <?php else: ?>
               <a class="text-decoration-none text-white" href="login.php">Sign in</a>
@@ -39,6 +46,7 @@ $user = current_user();
               <a class="text-decoration-none text-white" href="b2b-registration.php">B2B registration</a>
               <?php endif; ?>
               <a class="text-decoration-none text-white" href="order.php">Quick order</a>
+              <a class="text-decoration-none text-white" href="cart.php">Basket<?= cart_count() > 0 ? ' (' . cart_count() . ')' : '' ?></a>
               <a class="text-decoration-none text-white" href="quotation-request.php">Request quotation</a>
             </div>
           </div>
@@ -61,6 +69,7 @@ $user = current_user();
                 <li class="nav-item"><a class="nav-link <?= $active_nav === 'contact' ? 'active' : '' ?>" href="index.php#footer">Contact</a></li>
                 <?php if ($user): ?>
                 <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'dashboard' ? 'active' : '' ?>" <?= $active_nav === 'dashboard' ? 'aria-current="page"' : '' ?> href="dashboard.php">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'account' ? 'active' : '' ?>" href="account.php">My account</a></li>
                 <?php endif; ?>
                 <?php if (is_staff_user($user)): ?>
                 <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'reports' ? 'active' : '' ?>" <?= $active_nav === 'reports' ? 'aria-current="page"' : '' ?> href="reports.php">Reports</a></li>
@@ -75,8 +84,11 @@ $user = current_user();
                 <button class="btn btn-light" type="submit">Search</button>
                 <div class="search-suggestions d-none" id="search-suggestions" role="listbox" aria-label="Product suggestions"></div>
               </form>
-              <a href="order.php" class="btn btn-accent ms-lg-3 mt-3 mt-lg-0 position-relative cart-btn" aria-label="Quick order">
+              <?php $cartCount = cart_count(); ?>
+              <a href="cart.php" class="btn btn-accent ms-lg-3 mt-3 mt-lg-0 position-relative cart-btn"
+                 aria-label="Basket: <?= $cartCount ?> item<?= $cartCount === 1 ? '' : 's' ?>">
                 <i class="fa-solid fa-cart-shopping"></i>
+                <span class="cart-count badge rounded-pill text-bg-light <?= $cartCount > 0 ? '' : 'd-none' ?>"><?= $cartCount ?></span>
               </a>
             </div>
           </div>

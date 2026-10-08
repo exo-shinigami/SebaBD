@@ -85,13 +85,18 @@ Never commit a real production password here.
 
 ### 4. Open the site
 
-With Apache running:
+Copy the project folder into XAMPP's web root (or symlink it), then open it by folder name:
 
 ```text
-http://localhost/Ecommerce%20Website/
+http://localhost/SebaBD/
 ```
 
-Or use the PHP development server from the project root:
+On Windows, `mklink /D C:\xampp\htdocs\SebaBD C:\path\to\SebaBD` creates that link without
+duplicating the files. Apache reads `.htaccess` from the folder (XAMPP ships with
+`AllowOverride All`), which is what turns a mistyped address into the friendly `404.php`.
+
+Or use the PHP development server from the project root — handy while developing, though it
+ignores `.htaccess` (so unknown paths return the server's own message rather than `404.php`):
 
 ```powershell
 C:\xampp\php\php.exe -S 127.0.0.1:8787
@@ -762,9 +767,34 @@ pages refuse gracefully.
 | `b2b-registration.php` | Company + first branch + optional login (`B2B Client Account`, role 5) |
 | `order.php` | Quick order form; accepts `?product=<id>&qty=<n>` to pre-fill a line |
 | `quotation-request.php` | Quotation request form; same pre-fill support |
+| `cart.php` | The basket and checkout: add/update/remove lines, then place an order (`order` + `order_item`) from the session cart |
+| `order-detail.php` | One order for its owner (or staff): lines, delivery note, status timeline, invoice links, cancel while pending, reorder |
+| `account.php` | My account: name/username/email/phone, password change, the linked company and its branches, recent orders/quotations/invoices |
+| `404.php` | Friendly not-found page (search + catalog shortcuts); wired as Apache's error document |
 | `reports.php` | Staff report hub with role-locked cards |
 | `report-sales.php`, `report-invoices.php`, `report-quotations.php`, `report-procurement.php`, `report-stock.php` | Report entry pages |
 | `privacy.php`, `terms.php` | Policy pages describing the stored data and the trading rules |
+
+#### Back-office pages
+
+Staff modules, one entity per page, each handling its whole lifecycle through `?action=` and
+`?id=`. Which roles may open which module is declared once in `back_office_modules()`
+(`admin-bootstrap.php`) and read from there by the hub, the dashboard shortcuts and every page.
+
+| File | Responsibility |
+| --- | --- |
+| `admin.php` | Back-office hub: every module the signed-in role may open, as one card per module |
+| `admin-categories.php` | Categories (with a guard that refuses to delete one that still has products) |
+| `admin-vendors.php` | Suppliers, with the products each one supplies |
+| `admin-products.php` | Catalog: pricing, stock type (bulk or serialized), warranty default, category and vendor |
+| `admin-stock.php` | Stock: bulk quantity adjustments and the serialized unit register (add, change status, warranty dates) |
+| `admin-customers.php` | Clients and their branches — the records quotations and invoices are addressed to |
+| `admin-quotations.php` | Quotations: create, edit, change status, convert to an invoice |
+| `admin-invoices.php` | Invoices: raise from a quotation or an order, assign serialized units, record payment receipts |
+| `admin-purchase-orders.php` | Purchase orders: raise, edit, and receive — bulk quantity or one `product_instance` per serial number |
+| `admin-orders.php` | Storefront orders: status flow, lines, and invoicing |
+| `admin-users.php` | Logins and roles (Admin only): create staff or customer accounts, change role, reset a password |
+| `quotation.php`, `invoice.php`, `purchase-order.php` | The printable documents, rendered through one shared template |
 
 #### Shared code
 
@@ -774,8 +804,14 @@ pages refuse gracefully.
 | `db.php` | One shared PDO connection (`db()`) and `db_fetch_all()` |
 | `helpers.php` | Sessions, `current_user()`, `require_login()`, `staff_roles()`/`is_staff_user()`/`require_staff()`, `client_roles()`/`is_client_user()`, partial rendering, flash messages, JSON helpers, validation, old-input helpers, `next_id()`, `money()`, `amount_in_words()` |
 | `catalog-data.php` | Presentation metadata for products, category icons, catalog queries (`get_featured_products`, `search_products`, `get_product`, `related_products`, `product_units`, `stock_counts`, `stock_label`) |
+| `cart-data.php` | The session basket: add/update/remove, line assembly with live stock state, totals, and `cart_return_path()` — the guard that keeps a posted "return to" path inside this site |
+| `admin-bootstrap.php` | Back-office catalogue + permissions (`back_office_modules()`, `require_module()`), shared page builders, and the module switcher |
+| `partials/document.php` | The one printable-document template: letterhead, parties, item table, totals, amount in words, sign-off |
+| `partials/line-items.php` | The reusable line-item editor (product picker, quantity, unit price, warranty, live totals) used by quotations, invoices, purchase orders and orders |
+| `partials/admin-list.php` | Shared back-office list furniture: filters, empty state, pagination, row actions |
 | `partials/header.php` | Shared head, top strip, navigation, live search |
-| `partials/footer.php` | Footer, Bootstrap JS, AJAX script, flash auto-dismiss |
+| `partials/footer.php` | Footer, the confirmation strip used by add-to-basket, Bootstrap JS, AJAX script, flash auto-dismiss |
+| `.htaccess` | Apache rules: `ErrorDocument 404 404.php`, no source/SQL files served, no directory listings, cache and compression headers |
 | `partials/product-panel.php` | Product grid: heading, count, empty state, cards |
 | `partials/product-card.php` | One product card (used by the grid and by related products) |
 | `style.css` | The single stylesheet, including dashboard and product-detail components |
@@ -821,6 +857,60 @@ it is:
 | Store snapshot | `product`, `category`, `client`, `client_branch`, `product_instance`, `vendor` |
 | Customer view | `order`, `client`, `client_branch`, `quotation`, `invoice`, `payment_receipt`, `user` |
 
+### Shopping and checkout
+
+A basket lives in the session (`$_SESSION['cart']`, one product id → quantity per line) and
+nothing is written to the database until checkout. Only the id and the quantity are stored —
+names, prices and stock are read again on every page load, so a price edited in the back office
+applies to a basket that is already open.
+
+| Step | What happens |
+| --- | --- |
+| Add to basket | `POST cart.php intent=add` from a product card or the product page. The card posts the page it is standing on, so the shopper returns to the same search/category. A `fetch()` caller instead gets the new count and a confirmation strip, and never leaves the grid |
+| Review | `cart.php` shows each line with its live stock wording: in stock, partly on hand (sourced to order), or made to order — the store accepts back-orders rather than refusing the sale |
+| Checkout | Requires a signed-in user. Guests are sent to `login.php?next=cart.php` and come straight back with the basket intact |
+| Order | One `order` row for the customer plus one `order_item` per line, written in a single transaction; the basket is emptied and the customer lands on `order-detail.php` |
+
+Stock is **not** decremented at checkout. It moves when the invoice is raised and units are
+attached (`admin-invoices.php`), so the paperwork and the shelf always agree.
+
+### Back office
+
+`admin.php` is the hub; each module owns one entity end to end. The role split follows the
+reporting module:
+
+| Role | Modules |
+| --- | --- |
+| Admin | Every module, including users & roles |
+| Sales Manager | Customers, quotations, invoices, orders |
+| Inventory Manager | Categories, vendors, products, stock, purchase orders |
+| Client / B2B Client | None — the module pages answer 403, they are not merely hidden |
+
+Two rules the modules enforce rather than suggest:
+
+- A category that still holds products cannot be deleted, and a product that has been sold or
+  quoted cannot be deleted either — the pages offer deactivation instead.
+- Receiving a purchase order is the bridge back into sellable stock: a bulk line adds to
+  `product.StockQty`, a serialized line creates one `product_instance` per serial number with
+  its warranty clock started from the purchase date.
+
+### Printed documents
+
+`quotation.php?no=`, `invoice.php?no=` and `purchase-order.php?no=` render one shared template
+(`partials/document.php`) so the letterhead, party blocks, item table, totals, amount in words
+and sign-off can never drift apart between document types.
+
+| Document | Who may open it |
+| --- | --- |
+| Quotation | Staff, and the customer whose company owns the branch it is addressed to |
+| Invoice | Same rule — a customer cannot read another company's paperwork by guessing a number |
+| Purchase order | Staff with buying rights (Admin, Inventory Manager) only: it exposes supplier cost prices |
+
+The invoice adds the receipts recorded against it (with the balance after each one) and the
+serial numbers of the units sold, including the customer warranty expiry once a serialized unit
+is attached to a line. `@media print` strips the navigation, the toolbar and the shadows, so
+`Ctrl+P` produces clean A4 paperwork.
+
 ---
 
 ## AJAX and progressive enhancement
@@ -849,16 +939,21 @@ marks the most likely fields invalid and focuses the first one. On success it na
 | `api/check-account.php` | GET `username`, `email` | Availability hints during registration |
 | `index.php?ajax=panel` | GET `q`, `category`, `all` | Returns only the product-panel HTML fragment for in-place filtering |
 
+Every form that writes carries a CSRF token (`csrf_field()`), checked by `csrf_guard()` before
+the handler touches the database; a stale token answers `419` to `fetch()` and bounces a normal
+browser submit back with a flash message.
+
 Client-side hooks used by the JavaScript (keep them in sync with `assets/ajax.js`):
 
 | Hook | Used on | Effect |
 | --- | --- | --- |
-| `data-ajax` | `login`, `register`, `b2b-registration`, `order`, `quotation-request` | Submit without a page reload; errors render inline |
+| `data-ajax` | every form with a server-side write (`login`, `register`, `b2b-registration`, `order`, `quotation-request`, `cart`, all `admin-*` modules) | Submit without a page reload; errors render inline |
 | `[data-ajax-errors]` | the same forms | Container for the inline error list |
 | `data-live-search` | header search form | Suggestions dropdown with keyboard navigation |
 | `data-product-panel` / `data-filter-link` | `index.php` grid, sidebar, product cards | Filter the grid and update browser history |
 | `data-stock-note` | `order.php`, `quotation-request.php` | Per-line availability message |
-| `data-check-account` + `data-field-hint` | `register.php`, `b2b-registration.php` | Username/email hints |
+| `data-check-account` + `data-field-hint` | `register.php`, `b2b-registration.php`, `account.php` | Username/email hints |
+| `data-cart-add` response | product cards, `product.php` | An add-to-basket reply carries `cart.count`/`cart.message`; the script updates the nav badge and shows the confirmation strip instead of navigating |
 
 ---
 
@@ -936,9 +1031,15 @@ decide whether it is serialized (`product_instance` rows) or quantity-tracked (`
   and report permissions are checked in PHP, not by hiding links.
 - Catalog pages degrade gracefully when MySQL is offline; write pages fail with a clear message.
 
+- Every form that writes carries a per-session CSRF token; `csrf_guard()` refuses a stale or
+  missing one before any handler runs.
+- A request is told apart from an AJAX call by `X-Requested-With: fetch`, and both paths run the
+  same validation and the same permissions — the JavaScript layer is never the only guard.
+- `.htaccess` stops Apache from ever serving `config.php` or the SQL dumps as text (the failure
+  mode being PHP not loading), turns off directory listings, and wires the 404 page.
+
 For a production deployment you would still replace the XAMPP credentials, disable verbose
-debug output, enable HTTPS, add CSRF tokens to the forms, configure secure session cookies and
-replace the sample accounts.
+debug output, enable HTTPS, configure secure session cookies and replace the sample accounts.
 
 ---
 
@@ -985,9 +1086,11 @@ replace the sample accounts.
    and quotations, payments due and stock alerts.
 4. Open a product (`index.php` → any card) to see `product`, `category`, `vendor` and
    `product_instance` combined on one page.
-5. Sign in as `client` to see the same dashboard from a customer's point of view, then
-   place a quick order and watch `order` / `order_item` grow.
-6. Open `reports.php` and compare a report's SQL in `reports/*Report.php` with the schema.
-7. Change one thing in `style.css`, one blurb in `catalog-data.php`, and one query in
+5. Sign in as `client` to see the same dashboard from a customer's point of view, then add a
+   product to the basket, check out and watch `order` / `order_item` grow on `order-detail.php`.
+6. As `admin`, open `admin-quotations.php`, create a quotation, convert it to an invoice, record
+   a payment and print it — that walk covers the whole sales side of the schema.
+7. Open `reports.php` and compare a report's SQL in `reports/*Report.php` with the schema.
+8. Change one thing in `style.css`, one blurb in `catalog-data.php`, and one query in
    `index.php` — that covers most day-to-day frontend work.
 

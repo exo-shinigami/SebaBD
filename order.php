@@ -16,6 +16,8 @@ $catalog = db_fetch_all(
 );
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_guard('order.php');
+
     $shipping   = trim($_POST['shipping_address'] ?? '');
     $productIds = array_map('intval', $_POST['product_id'] ?? []);
     $quantities = array_map('intval', $_POST['quantity'] ?? []);
@@ -133,6 +135,7 @@ ajax_errors($errors);
           </div>
 
           <form method="post" action="order.php" novalidate data-ajax>
+            <?= csrf_field() ?>
             <h2 class="form-section-title">Delivery details</h2>
             <div class="mb-3">
               <label class="form-label" for="shipping_address">Shipping address <span class="req">*</span></label>

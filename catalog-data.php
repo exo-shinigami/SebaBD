@@ -56,6 +56,38 @@ function product_meta(): array
 }
 
 /**
+ * The product's picture, or a branded placeholder when no photo has been mapped
+ * for it in product_meta().
+ *
+ * Products created in the back office have no entry in product_meta() by
+ * design — the database, not this file, decides whether a product exists. The
+ * placeholder keeps those products looking deliberate on the storefront
+ * instead of showing a broken image icon.
+ *
+ * @param string $class CSS class for the <img>, e.g. 'card-img-top product-image'.
+ */
+function product_image_html(array $product, string $class = 'product-image'): string
+{
+    $image = trim((string) ($product['image'] ?? ''));
+    $alt   = (string) ($product['alt'] ?? $product['ProductName'] ?? 'Product');
+
+    $classAttr = trim($class) !== '' ? ' class="' . htmlspecialchars($class) . '"' : '';
+
+    if ($image !== '') {
+        return '<img src="' . htmlspecialchars($image) . '"' . $classAttr
+             . ' alt="' . htmlspecialchars($alt) . '">';
+    }
+
+    // No photo: a tile in the same space, carrying the category icon and the
+    // product name so the card still reads at a glance.
+    return '<div' . ($classAttr !== '' ? ' class="' . htmlspecialchars(trim($class) . ' product-image-fallback') . '"' : '')
+         . ' role="img" aria-label="' . htmlspecialchars($alt) . '">'
+         . '<i class="' . htmlspecialchars(category_icon((string) ($product['CategoryName'] ?? ''))) . '"></i>'
+         . '<span>' . htmlspecialchars((string) ($product['ProductName'] ?? '')) . '</span>'
+         . '</div>';
+}
+
+/**
  * Font Awesome icon per category name (used when a category has no icon mapping).
  */
 function category_icon(string $name): string

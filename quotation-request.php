@@ -33,6 +33,8 @@ $catalog = db_fetch_all(
 );
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_guard('quotation-request.php');
+
     $subject    = trim($_POST['subject'] ?? '');
     $branchId   = (int) ($_POST['branch_id'] ?? 0);
     $contact    = trim($_POST['contact_name'] ?? '');
@@ -209,6 +211,7 @@ ajax_errors($errors);
           </div>
 
           <form method="post" action="quotation-request.php" novalidate data-ajax>
+            <?= csrf_field() ?>
             <h2 class="form-section-title">Your request</h2>
             <div class="row g-3">
               <div class="col-md-7">

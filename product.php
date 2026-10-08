@@ -70,7 +70,7 @@ $quotationUrl = 'quotation-request.php?product=' . $productId . '&qty=1';
       <div class="row g-4 align-items-start">
         <div class="col-lg-5">
           <div class="product-detail-media">
-            <img src="<?= htmlspecialchars($product['image'] ?? '') ?>" alt="<?= htmlspecialchars($product['alt'] ?? $product['ProductName']) ?>">
+            <?= product_image_html($product, 'product-detail-photo') ?>
             <?php if (!empty($product['badge'])): ?>
             <span class="badge text-bg-dark product-detail-badge"><?= htmlspecialchars($product['badge']) ?></span>
             <?php endif; ?>
@@ -85,7 +85,9 @@ $quotationUrl = 'quotation-request.php?product=' . $productId . '&qty=1';
             <span class="text-muted">· Product ID #<?= (int) $product['ProductID'] ?></span>
           </p>
 
-          <p class="mb-3"><?= htmlspecialchars($product['blurb'] ?? '') ?></p>
+          <?php if (!empty($product['blurb'])): ?>
+          <p class="mb-3"><?= htmlspecialchars($product['blurb']) ?></p>
+          <?php endif; ?>
 
           <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
             <span class="price price-lg"><?= money($product['StandardPrice']) ?></span>
@@ -97,10 +99,31 @@ $quotationUrl = 'quotation-request.php?product=' . $productId . '&qty=1';
             </span>
           </div>
 
-          <div class="d-flex flex-wrap gap-2 mb-4">
-            <a class="btn btn-accent btn-lg" href="<?= $orderUrl ?>"><i class="fa-solid fa-cart-shopping me-2"></i>Order this product</a>
-            <a class="btn btn-outline-dark btn-lg" href="<?= $quotationUrl ?>"><i class="fa-solid fa-file-invoice me-2"></i>Request quotation</a>
-          </div>
+          <!-- Buying: add to the basket with a quantity of your own, or go
+               straight to the quick-order form for a multi-line order. -->
+          <form class="product-buy" method="post" action="cart.php" data-ajax>
+            <?= csrf_field() ?>
+            <input type="hidden" name="intent" value="add">
+            <input type="hidden" name="product_id" value="<?= $productId ?>">
+            <input type="hidden" name="return" value="product.php?id=<?= $productId ?>">
+
+            <label class="form-label small mb-1" for="buy-qty">Quantity</label>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+              <input class="form-control text-center" style="max-width:6rem;" type="number"
+                     id="buy-qty" name="quantity" value="1" min="1" max="999" step="1">
+              <button class="btn btn-accent btn-lg" type="submit">
+                <i class="fa-solid fa-cart-plus me-2"></i>Add to basket
+              </button>
+              <a class="btn btn-outline-dark btn-lg" href="<?= $quotationUrl ?>">
+                <i class="fa-solid fa-file-invoice me-2"></i>Request quotation
+              </a>
+            </div>
+            <p class="small text-muted mb-4">
+              Prefer a single form for a whole order?
+              <a href="<?= $orderUrl ?>">Use the quick order form</a> — it takes many lines at once and can be
+              submitted without an account.
+            </p>
+          </form>
 
           <div class="report-panel mb-0">
             <div class="report-panel-head">

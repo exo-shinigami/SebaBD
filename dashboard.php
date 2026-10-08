@@ -19,6 +19,9 @@
  */
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/catalog-data.php';
+// The back-office catalogue is what decides which modules a role may open, so
+// the shortcuts below and the hub itself can never disagree.
+require_once __DIR__ . '/admin-bootstrap.php';
 
 $user    = require_login('dashboard.php');
 $isStaff = is_staff_user($user);
@@ -456,7 +459,11 @@ if (!$isStaff && $dbUp) {
       <p class="report-panel-sub">Jump straight to the tools you use most.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <a class="btn btn-accent" href="reports.php"><i class="fa-solid fa-chart-line me-2"></i>Reports hub</a>
+      <a class="btn btn-accent" href="admin.php"><i class="fa-solid fa-sliders me-2"></i>Back office</a>
+      <?php foreach (array_slice(back_office_allowed_modules($user), 0, 5, true) as $page => $module): ?>
+      <a class="btn btn-outline-dark" href="<?= htmlspecialchars((string) $page) ?>"><?= htmlspecialchars($module['title']) ?></a>
+      <?php endforeach; ?>
+      <a class="btn btn-outline-dark" href="reports.php"><i class="fa-solid fa-chart-line me-2"></i>Reports hub</a>
       <a class="btn btn-outline-dark" href="report-sales.php">Sales</a>
       <a class="btn btn-outline-dark" href="report-invoices.php">Invoices</a>
       <a class="btn btn-outline-dark" href="report-quotations.php">Quotations</a>

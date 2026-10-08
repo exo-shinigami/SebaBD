@@ -125,6 +125,44 @@
         if (first && first.focus) first.focus({ preventScroll: true });
     }
 
+    /**
+     * Update the basket badge in the nav and show a short confirmation.
+     * The server sends this after an add-to-cart, so the shopper never has to
+     * leave the catalog to find out whether the click worked.
+     */
+    function cartFeedback(info) {
+        if (!info) return;
+
+        var badge = document.querySelector('.cart-count');
+        if (badge) {
+            badge.textContent = info.count;
+            badge.classList.toggle('d-none', !info.count);
+        }
+
+        var link = document.querySelector('.cart-btn');
+        if (link) {
+            link.setAttribute('aria-label', 'Basket: ' + info.count + (info.count === 1 ? ' item' : ' items'));
+        }
+
+        // The top strip carries a text link with the same count.
+        document.querySelectorAll('a[href="cart.php"]').forEach(function (anchor) {
+            if (!anchor.classList.contains('cart-btn')) {
+                anchor.textContent = info.count ? 'Basket (' + info.count + ')' : 'Basket';
+            }
+        });
+
+        var toast = document.getElementById('site-toast');
+        if (toast && info.message) {
+            toast.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>' + escapeHtml(info.message)
+                + '</span><a href="cart.php">View basket</a>';
+            toast.classList.add('is-visible');
+            clearTimeout(toast.dataset.timer);
+            toast.dataset.timer = setTimeout(function () {
+                toast.classList.remove('is-visible');
+            }, 5000);
+        }
+    }
+
     function setBusy(form, busy) {
         form.classList.toggle('is-busy', busy);
         form.querySelectorAll('button[type="submit"], input[type="submit"]').forEach(function (button) {
@@ -163,6 +201,12 @@
                             return;
                         }
                         if (result.data && result.data.ok) {
+                            if (result.data.cart) {
+                                // Add to cart stays put: the page updates in place.
+                                cartFeedback(result.data.cart);
+                                setBusy(form, false);
+                                return;
+                            }
                             // The server already queued the flash message; going
                             // there shows exactly what a normal post would.
                             window.location.assign(result.data.redirect || window.location.href);

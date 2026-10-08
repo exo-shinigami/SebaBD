@@ -4,6 +4,8 @@ require_once __DIR__ . '/helpers.php';
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_guard('b2b-registration.php');
+
     $company       = trim($_POST['company_name'] ?? '');
     $contactPerson = trim($_POST['contact_person'] ?? '');
     $email         = trim($_POST['email'] ?? '');
@@ -135,6 +137,7 @@ ajax_errors($errors);
           </div>
 
           <form method="post" action="b2b-registration.php" novalidate data-ajax data-check-account>
+            <?= csrf_field() ?>
             <h2 class="form-section-title">Company (head office)</h2>
             <div class="row g-3">
               <div class="col-md-7">

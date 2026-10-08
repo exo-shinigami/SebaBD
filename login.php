@@ -1,11 +1,17 @@
 <?php
 require_once __DIR__ . '/helpers.php';
+// cart_return_path() guards the ?next= target; it lives with the cart because
+// that is the other place a visitor-supplied path is followed.
+require_once __DIR__ . '/cart-data.php';
 
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_guard('login.php');
+
     $identifier = trim($_POST['identifier'] ?? '');
-    $password   = $_POST['password'] ?? '';        $next       = $_POST['next'] ?? 'dashboard.php';
+    $password   = $_POST['password'] ?? '';
+    $next       = $_POST['next'] ?? 'dashboard.php';
 
     keep_old(['identifier' => $identifier]);
 
@@ -29,16 +35,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_regenerate_id(true);
             $_SESSION['user_id'] = (int) $rows[0]['UserID'];
             flash_set('success', 'Signed in as ' . $rows[0]['FullName'] . '.');
-            // Only allow internal redirects. AJAX callers receive the same
-            // target inside the JSON reply and navigate themselves.
-            $target = str_starts_with($next, '/') || !str_contains($next, '://') ? $next : 'dashboard.php';
+            // Only allow internal redirects: cart_return_path() refuses full
+            // URLs, protocol-relative //host targets and paths that climb out,
+            // so ?next= can never be turned into an open redirect. AJAX callers
+            // receive the same target inside the JSON reply and navigate themselves.
+            $target = cart_return_path($next, 'dashboard.php');
             post_success($target);
         }
         $errors[] = 'Invalid credentials — check your username/email and password.';
     }
     $next = $_POST['next'] ?? 'dashboard.php';
 } else {
-    $next = $_GET['next'] ?? 'dashboard.php';
+    // Shown in the form so it survives the round trip; validated on the way out.
+    $next = cart_return_path((string) ($_GET['next'] ?? ''), 'dashboard.php');
 }
 
 // A fetch() submit stops here with the error list; a normal submit renders them.
@@ -67,6 +76,7 @@ ajax_errors($errors);
           </div>
 
           <form method="post" action="login.php" novalidate data-ajax>
+            <?= csrf_field() ?>
             <input type="hidden" name="next" value="<?= htmlspecialchars($next) ?>">
             <div class="mb-3">
               <label class="form-label" for="identifier">Username or email</label>

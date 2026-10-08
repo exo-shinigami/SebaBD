@@ -1,0 +1,37 @@
+# SebaBD — Apache configuration.
+#
+# Drop this project into XAMPP's htdocs (or symlink it) and everything below
+# applies automatically. Nothing here is required to make the site work; each
+# rule closes a gap that would otherwise be visible to a visitor.
+
+# Friendly not-found page. Apache keeps the 404 status; 404.php then renders the
+# normal site chrome with a search box and the catalog shortcuts.
+ErrorDocument 404 404.php
+
+# Never serve a PHP source file as text. If PHP ever fails to load, Apache would
+# otherwise hand out config.php (database credentials) and the SQL dumps as
+# plain files. Denying them outright removes that failure mode.
+<FilesMatch "\.(sql|md|log|ini|example\.php)$">
+    Require all denied
+</FilesMatch>
+<Files "config.php">
+    Require all denied
+</Files>
+
+# Directory listings leak the shape of the project.
+Options -Indexes
+
+# Cache the stylesheet and scripts for a week, but never cache PHP responses.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(css|js|png|jpe?g|svg|webp|woff2?)$">
+        Header set Cache-Control "public, max-age=604800"
+    </FilesMatch>
+    <FilesMatch "\.php$">
+        Header set Cache-Control "no-store"
+    </FilesMatch>
+</IfModule>
+
+# Compress text responses when the browser asks for it.
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json image/svg+xml
+</IfModule>
