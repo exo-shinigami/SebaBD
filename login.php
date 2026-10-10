@@ -31,18 +31,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [':uid' => $identifier, ':email' => $identifier]
         );
         if ($rows && password_verify($password, $rows[0]['PasswordHash'])) {
-            clear_old();
-            session_regenerate_id(true);
-            $_SESSION['user_id'] = (int) $rows[0]['UserID'];
-            flash_set('success', 'Signed in as ' . $rows[0]['FullName'] . '.');
-            // Only allow internal redirects: cart_return_path() refuses full
-            // URLs, protocol-relative //host targets and paths that climb out,
-            // so ?next= can never be turned into an open redirect. AJAX callers
-            // receive the same target inside the JSON reply and navigate themselves.
-            $target = cart_return_path($next, 'dashboard.php');
-            post_success($target);
+            // The password is right, but an administrator may have closed the
+            // account (user.IsActive = 0). That is a different answer from "wrong
+            // password", so it gets its own message instead of sending someone
+            // off to reset a password that works.
+            if (!account_is_active((int) $rows[0]['UserID'])) {
+                $errors[] = 'This account has been deactivated. Please contact the SebaBD administrator.';
+            } else {
+                clear_old();
+                session_regenerate_id(true);
+                $_SESSION['user_id'] = (int) $rows[0]['UserID'];
+                flash_set('success', 'Signed in as ' . $rows[0]['FullName'] . '.');
+                // Only allow internal redirects: cart_return_path() refuses full
+                // URLs, protocol-relative //host targets and paths that climb out,
+                // so ?next= can never be turned into an open redirect. AJAX callers
+                // receive the same target inside the JSON reply and navigate themselves.
+                $target = cart_return_path($next, 'dashboard.php');
+                post_success($target);
+            }
+        } else {
+            $errors[] = 'Invalid credentials — check your username/email and password.';
         }
-        $errors[] = 'Invalid credentials — check your username/email and password.';
     }
     $next = $_POST['next'] ?? 'dashboard.php';
 } else {

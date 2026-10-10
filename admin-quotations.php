@@ -98,7 +98,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $productIds = post_rows('product_id');
         $quantities = post_rows('quantity');
         $prices     = post_rows('unit_price');
-        $warranties = post_rows('warranty_months');
+        // Note: no warranty input. quotation_item.WarrantyMonths is a product
+        // fact, so it is read from the catalog row below and any posted value is
+        // discarded (the database trigger enforces the same rule).
 
         if ($branchId <= 0) {
             $errors[] = 'Choose the customer branch this quotation is addressed to.';
@@ -151,13 +153,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 continue;
             }
 
-            $warranty = (int) ($warranties[$index] ?? $product['DefaultWarrantyMonths']);
-
             $lines[] = [
                 'product'  => $product,
                 'qty'      => min(9999, $quantity),
                 'price'    => $price,
-                'warranty' => max(0, min(240, $warranty)),
+                // Only the vendor's warranty for this product, never a typed one.
+                'warranty' => max(0, (int) $product['DefaultWarrantyMonths']),
             ];
         }
         if (!$lines && !$errors) {
@@ -239,7 +240,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'product_id'     => $productIds,
             'quantity'       => $quantities,
             'unit_price'     => $prices,
-            'warranty_months' => $warranties,
         ]);
     }
 }
@@ -255,8 +255,29 @@ $branches     = [];
 $nextFreeNo   = 0;
 $totals       = [];
 $quotePage    = null;
+// BranchID => 'internal' | 'walkin', so the pipeline can tell a quotation that
+// belongs to SebaBD's own accounts from one addressed to a customer.
+$systemBranches = [];
+
+/**
+ * A small label for a quotation filed under a house account rather than a
+ * customer. Returns '' for ordinary customer quotations.
+ */
+$branchOriginBadge = function (int $branchId) use (&$systemBranches): string {
+    $kind = $systemBranches[$branchId] ?? null;
+    if ($kind === 'internal') {
+        return '<span class="report-badge report-badge-info ms-1"><i class="fa-solid fa-building-shield me-1"></i>Internal</span>';
+    }
+    if ($kind === 'walkin') {
+        return '<span class="report-badge report-badge-plain ms-1">Walk-in</span>';
+    }
+
+    return '';
+};
 
 if ($dbUp) {
+    $systemBranches = system_branch_ids();
+
     $catalog = db_fetch_all(
         'SELECT p.ProductID, p.ProductName, p.StandardPrice, p.DefaultWarrantyMonths, c.CategoryName
          FROM product p JOIN category c ON c.CategoryID = p.CategoryID
@@ -339,7 +360,7 @@ if ($dbUp) {
     $quotePage = paginate((int) ($countRow[0]['n'] ?? 0), 20);
 
     $rows = db_fetch_all(
-        'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status,
+        'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status, q.BranchID,
                 b.BranchName, c.ClientID, c.CompanyName,
                 (SELECT COUNT(*) FROM quotation_item qi WHERE qi.QuotationNo = q.QuotationNo) AS `Lines`,
                 (SELECT i.InvoiceNo FROM invoice i WHERE i.QuotationNo = q.QuotationNo) AS InvoiceNo'
@@ -458,7 +479,7 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
       'panel_title' => 'Quotation pipeline',
       'panel_sub'   => 'Newest first. Accept a quotation, then raise its invoice in one step.',
       'columns'     => ['#', 'Date', 'Customer branch', 'Subject', 'Lines', 'Value', 'Status', ''],
-      'rows'        => array_map(function ($row) {
+      'rows'        => array_map(function ($row) use ($branchOriginBadge) {
           $actions = '<a class="btn btn-sm btn-outline-secondary" href="admin-quotations.php?action=view&id=' . (int) $row['QuotationNo'] . '" title="Open">'
                    . '<i class="fa-solid fa-eye"></i><span class="visually-hidden">Open</span></a> ';
 
@@ -485,6 +506,7 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
               format_date($row['QuotationDate']),
               '<a class="text-decoration-none" href="admin-customers.php?action=edit&id=' . (int) $row['ClientID'] . '">'
                   . htmlspecialchars($row['CompanyName']) . '</a>'
+                  . $branchOriginBadge((int) $row['BranchID'])
                   . '<small class="d-block text-muted">' . htmlspecialchars($row['BranchName']) . '</small>',
               htmlspecialchars((string) $row['Subject']),
               (int) $row['Lines'],
@@ -524,6 +546,7 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
             <h2 class="report-panel-title">Quotation #<?= (int) $quote['QuotationNo'] ?></h2>
             <p class="report-panel-sub">
               <?= htmlspecialchars($quote['CompanyName']) ?> — <?= htmlspecialchars($quote['BranchName']) ?>
+              <?= $branchOriginBadge((int) $quote['BranchID']) ?>
               · <?= format_date($quote['QuotationDate']) ?>
             </p>
           </div>
@@ -645,26 +668,24 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
       $isEdit   = $action === 'edit' && $quote !== null;
       $oldLines = [];
       if ($errors && old_array('product_id')) {
-          // A failed submit: rebuild exactly what the person typed.
+          // A failed submit: rebuild exactly what the person typed. The warranty
+          // is not restored from the form — it belongs to the product.
           $oldProducts = old_array('product_id');
           $oldQtys     = old_array('quantity');
           $oldPrices   = old_array('unit_price');
-          $oldWarranty = old_array('warranty_months');
           foreach ($oldProducts as $index => $productId) {
               $oldLines[] = [
-                  'id'       => (int) $productId,
-                  'qty'      => max(1, (int) ($oldQtys[$index] ?? 1)),
-                  'price'    => $oldPrices[$index] ?? '',
-                  'warranty' => $oldWarranty[$index] ?? '',
+                  'id'    => (int) $productId,
+                  'qty'   => max(1, (int) ($oldQtys[$index] ?? 1)),
+                  'price' => $oldPrices[$index] ?? '',
               ];
           }
       } elseif ($isEdit) {
           foreach ($quoteLines as $line) {
               $oldLines[] = [
-                  'id'       => (int) $line['ProductID'],
-                  'qty'      => (int) $line['Quantity'],
-                  'price'    => (string) $line['UnitPrice'],
-                  'warranty' => (int) $line['WarrantyMonths'],
+                  'id'    => (int) $line['ProductID'],
+                  'qty'   => (int) $line['Quantity'],
+                  'price' => (string) $line['UnitPrice'],
               ];
           }
       }
@@ -710,6 +731,8 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
           <p class="text-muted small mb-0">
             Prices default to the catalog list price but can be overridden for this quotation —
             the unit price is stored on the line, so a later catalog change never rewrites what was quoted.
+            <strong>Warranty is not editable:</strong> every line carries its product's
+            <code>DefaultWarrantyMonths</code>, because the vendor sets it, not sales.
           </p>
         </div>
 
@@ -792,6 +815,7 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
         <ul class="list-unstyled small mb-0 dash-list">
           <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i><code>quotation</code> — branch, date, subject, total, amount in words, status</li>
           <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i><code>quotation_item</code> — product, quantity, unit price, line total, warranty months</li>
+          <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i>Warranty is copied from <code>product.DefaultWarrantyMonths</code> — the vendor's figure. It is shown on each line but cannot be edited, and a database trigger refuses any other value.</li>
           <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i>The total is recomputed from the lines on every save.</li>
           <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i>Editing replaces the lines, so the header total can never drift from its items.</li>
         </ul>

@@ -50,6 +50,22 @@ function require_login(string $redirectBack = ''): array
         header('Location: login.php?next=' . urlencode($back));
         exit;
     }
+
+    // An administrator may deactivate an account while the person is signed in:
+    // the session ends on their very next request rather than lasting until the
+    // browser is closed. Clearing user_id is what makes current_user() report
+    // nobody, so every page treats it as a signed-out visitor again.
+    if (!account_is_active((int) $user['UserID'])) {
+        unset($_SESSION['user_id']);
+        session_regenerate_id(true);
+        flash_set('error', 'This account has been deactivated by an administrator.');
+        if (json_request()) {
+            json_response(['ok' => false, 'errors' => ['This account has been deactivated by an administrator.']], 403);
+        }
+        header('Location: login.php');
+        exit;
+    }
+
     return $user;
 }
 
@@ -704,6 +720,257 @@ function company_details(): array
     ], is_array($cfg['company'] ?? null) ? $cfg['company'] : []);
 
     return $details;
+}
+
+/* ------------------------------------------------------- system accounts */
+
+/**
+ * SebaBD's two house accounts.
+ *
+ * Not every document can be addressed to a customer: a visitor with no company
+ * asking for a price, or a staff member ordering stock for the office, still
+ * needs a real `client_branch` because `quotation.BranchID`, `invoice.BranchID`
+ * and `order.BranchID` are foreign keys. Both are ordinary `client` rows with
+ * `UserID = NULL` (the schema's "a company without a login"), seeded by
+ * database/migrate-internal-workflow.sql and created on demand below.
+ *
+ * The names are looked up by string, so they can be renamed in config.php
+ * ('system_accounts') without touching the code.
+ */
+function system_accounts(): array
+{
+    static $accounts = null;
+    if ($accounts !== null) {
+        return $accounts;
+    }
+
+    $cfg = require __DIR__ . '/config.php';
+    $accounts = array_replace_recursive([
+        'walkin' => [
+            'company' => 'Walk-in Customers',
+            'branch'  => 'Dhaka Sales Counter',
+            'contact' => 'Retail Customer',
+            'email'   => 'sales@sebabd.com',
+            'phone'   => null,
+            'address' => 'Dhaka, Bangladesh',
+        ],
+        'internal' => [
+            'company' => 'SebaBD Internal Operations',
+            'branch'  => 'SebaBD Head Office — Internal',
+            'contact' => 'SebaBD Operations Desk',
+            'email'   => 'operations@sebabd.com',
+            'phone'   => '+880 1711 100100',
+            'address' => 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh',
+        ],
+    ], is_array($cfg['system_accounts'] ?? null) ? $cfg['system_accounts'] : []);
+
+    return $accounts;
+}
+
+/**
+ * The branch a house account files its documents under, created on first use.
+ *
+ * Call this inside a transaction: `client` and `client_branch` keys are
+ * allocated with next_id(), which takes the table's lock for the request.
+ *
+ * $clientOverrides fills in the house account's contact details the first time
+ * it is created (a walk-in counter can record who asked), and is ignored once
+ * the account exists — the house account is shared by every visitor, so it is
+ * never rewritten from one request.
+ */
+function system_branch_id(PDO $pdo, string $key, array $clientOverrides = []): int
+{
+    $account = system_accounts()[$key] ?? null;
+    if ($account === null) {
+        throw new InvalidArgumentException('Unknown system account: ' . $key);
+    }
+
+    $rows = db_fetch_all(
+        'SELECT b.BranchID FROM client_branch b JOIN client c ON c.ClientID = b.ClientID
+         WHERE c.CompanyName = :company AND b.BranchName = :branch LIMIT 1',
+        [':company' => $account['company'], ':branch' => $account['branch']]
+    );
+    if ($rows) {
+        return (int) $rows[0]['BranchID'];
+    }
+
+    $clientRows = db_fetch_all(
+        'SELECT ClientID FROM client WHERE CompanyName = :company LIMIT 1',
+        [':company' => $account['company']]
+    );
+    $clientId = $clientRows
+        ? (int) $clientRows[0]['ClientID']
+        : db_insert($pdo, 'client', [
+            'UserID'        => null,
+            'CompanyName'   => $account['company'],
+            'ContactPerson' => $clientOverrides['contact'] ?? $account['contact'],
+            'Email'         => $clientOverrides['email'] ?? $account['email'],
+            'Phone'         => $clientOverrides['phone'] ?? $account['phone'],
+            'Address'       => $account['address'],
+        ], 'ClientID');
+
+    return db_insert($pdo, 'client_branch', [
+        'ClientID'      => $clientId,
+        'BranchName'    => $account['branch'],
+        'BranchAddress' => $account['address'],
+        'ContactNo'     => $clientOverrides['phone'] ?? $account['phone'],
+    ], 'BranchID');
+}
+
+/**
+ * Where a visitor without a company account files a quotation request.
+ * The branch always exists, so quotation.BranchID can never fail its foreign key.
+ */
+function walkin_branch_id(PDO $pdo, array $clientOverrides = []): int
+{
+    return system_branch_id($pdo, 'walkin', $clientOverrides);
+}
+
+/** The branch internal (staff) orders and requests are booked to. */
+function internal_branch_id(PDO $pdo): int
+{
+    return system_branch_id($pdo, 'internal');
+}
+
+/**
+ * BranchID => which house account is filed there: 'internal' or 'walkin'.
+ *
+ * One query for a whole page, so a list can label the rows whose branch is a
+ * house account (an internal procurement order, a walk-in quotation) without
+ * a lookup per row. Returns [] when there are no house branches yet.
+ *
+ * @return array<int,string>
+ */
+function system_branch_ids(): array
+{
+    $byBranchName = [];
+    foreach (system_accounts() as $key => $account) {
+        $byBranchName[$account['branch']] = $key;
+    }
+
+    $placeholders = [];
+    $params       = [];
+    foreach (array_keys($byBranchName) as $index => $name) {
+        $placeholders[]        = ':n' . $index;
+        $params[':n' . $index] = $name;
+    }
+    if (!$placeholders) {
+        return [];
+    }
+
+    $rows = db_fetch_all(
+        'SELECT BranchID, BranchName FROM client_branch
+         WHERE BranchName IN (' . implode(', ', $placeholders) . ')',
+        $params
+    );
+
+    $out = [];
+    foreach ($rows as $row) {
+        $out[(int) $row['BranchID']] = $byBranchName[$row['BranchName']] ?? 'walkin';
+    }
+
+    return $out;
+}
+
+/* ------------------------------------------------------------- workflow */
+
+/** Order channels: a customer order versus SebaBD's own house order. */
+const ORDER_TYPE_RETAIL = 'Retail';
+const ORDER_TYPE_INTERNAL = 'Internal';
+
+/**
+ * Which pipeline does work started by this account belong to?
+ *
+ * Staff (Admin, Sales Manager, Inventory Manager) ordering from the storefront
+ * are buying for SebaBD, not for a customer, so their orders and quotation
+ * requests are filed under the internal house account instead of a client
+ * record. This one function is the rule every entry point reads.
+ */
+function order_type_for(?array $user): string
+{
+    return is_staff_user($user) ? ORDER_TYPE_INTERNAL : ORDER_TYPE_RETAIL;
+}
+
+/** The branch an order of this channel is booked to, or null for retail. */
+function order_branch_id(PDO $pdo, string $orderType): ?int
+{
+    return $orderType === ORDER_TYPE_INTERNAL ? internal_branch_id($pdo) : null;
+}
+
+/* -------------------------------------------------------- product facts */
+
+/**
+ * Warranty months a product carries, straight from the catalog.
+ *
+ * Warranty is a property of the product — the vendor supplies it and the
+ * catalog stores it in `product.DefaultWarrantyMonths` — so nothing that
+ * arrives from a form is ever trusted for it. See product_warranties() for
+ * the batch form, and database/migrate-internal-workflow.sql for the trigger
+ * that enforces the same rule inside MySQL.
+ */
+function product_warranty_months(int $productId): int
+{
+    return product_warranties([$productId])[$productId] ?? 0;
+}
+
+/**
+ * product id => warranty months, for a batch of ids (unknown ids are absent).
+ *
+ * @return array<int,int>
+ */
+function product_warranties(array $productIds): array
+{
+    $ids = array_values(array_unique(array_filter(
+        array_map('intval', $productIds),
+        fn($id) => $id > 0
+    )));
+    if (!$ids) {
+        return [];
+    }
+
+    $placeholders = [];
+    $params       = [];
+    foreach ($ids as $index => $id) {
+        $placeholders[]         = ':p' . $index;
+        $params[':p' . $index]  = $id;
+    }
+
+    $rows = db_fetch_all(
+        'SELECT ProductID, DefaultWarrantyMonths FROM product
+         WHERE ProductID IN (' . implode(', ', $placeholders) . ')',
+        $params
+    );
+
+    $out = [];
+    foreach ($rows as $row) {
+        $out[(int) $row['ProductID']] = max(0, (int) $row['DefaultWarrantyMonths']);
+    }
+
+    return $out;
+}
+
+/* ------------------------------------------------------- account state */
+
+/**
+ * May this account sign in?
+ *
+ * Deactivating a login (user.IsActive = 0) keeps its order and document
+ * history intact while stopping the person at the door. A missing row means
+ * either the account is gone — which require_login() already handles — or the
+ * IsActive column has not been added yet (migration not run), so the account is
+ * treated as active rather than locking every user out.
+ */
+function account_is_active(int $userId): bool
+{
+    $rows = db_fetch_all('SELECT IsActive FROM `user` WHERE UserID = :id', [':id' => $userId]);
+
+    return !$rows || (int) ($rows[0]['IsActive'] ?? 1) === 1;
+}
+
+/** Has the IsActive column been added to `user` yet (migration run)? */
+function user_activation_supported(): bool
+{
+    return (bool) db_fetch_all("SHOW COLUMNS FROM `user` LIKE 'IsActive'");
 }
 
 /* --------------------------------------------------------- DB write utils */

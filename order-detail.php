@@ -23,10 +23,12 @@ $id   = max(0, (int) ($_GET['id'] ?? 0));
 $justPlaced = isset($_GET['placed']);
 
 $rows = db_fetch_all(
-    'SELECT o.OrderID, o.UserID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.ShippingAddress,
-            u.FullName, u.Email, u.Phone, u.Username
+    'SELECT o.OrderID, o.UserID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType,
+            o.BranchID, o.ShippingAddress,
+            b.BranchName, u.FullName, u.Email, u.Phone, u.Username
      FROM `order` o
      JOIN `user` u ON u.UserID = o.UserID
+     LEFT JOIN client_branch b ON b.BranchID = o.BranchID
      WHERE o.OrderID = :id',
     [':id' => $id]
 );
@@ -154,6 +156,9 @@ foreach ($steps as $step => $name) {
 $total       = (float) $order['TotalAmount'];
 $invoice     = $invoices[0] ?? null;
 $page_title  = 'Order #' . $id;
+// An internal order is SebaBD buying for itself (placed by a staff account); a
+// customer order is a sale. The page names which one this is.
+$isInternal = ($order['OrderType'] ?? ORDER_TYPE_RETAIL) === ORDER_TYPE_INTERNAL;
 ?>
 <?= partial_render('partials/header.php', ['page_title' => $page_title, 'active_nav' => 'dashboard']) ?>
 
@@ -187,10 +192,19 @@ $page_title  = 'Order #' . $id;
         <p class="text-muted mb-0">
           Placed <?= htmlspecialchars(format_date($order['OrderDate'], 'd M Y, H:i')) ?>
           by <?= htmlspecialchars($order['FullName']) ?>
+          <?php if ($isInternal): ?>
+            — <span class="report-badge report-badge-info"><i class="fa-solid fa-building-shield me-1"></i>Internal order</span>
+          <?php endif; ?>
           <?php if ($isStaff): ?>
             — <span class="report-badge report-badge-plain">visible to you as staff</span>
           <?php endif; ?>
         </p>
+        <?php if ($isInternal && !empty($order['BranchName'])): ?>
+        <p class="text-muted small mb-0">
+          SebaBD's own purchase, booked to <?= htmlspecialchars((string) $order['BranchName']) ?>. Your own basket
+          orders are kept apart from what customers buy.
+        </p>
+        <?php endif; ?>
       </div>
       <div class="d-flex flex-wrap gap-2">
         <?php if (!$isStaff && $status === 'Pending' && !$invoices): ?>

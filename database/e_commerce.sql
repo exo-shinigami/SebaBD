@@ -74,7 +74,13 @@ INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Ema
 (1, 4, 'Meghna Infotech Ltd', 'Farhana Rahman', 'contact@meghnainfotech.com', '+880 1711 100104', 'Plot 12, Road 5, Banani, Dhaka 1213'),
 (2, NULL, 'Karnaphuli Logistics Ltd', 'Shariful Islam', 'info@karnaphulilogistics.com', '+880 1811 100105', 'Holding 45, Agrabad C/A, Chattogram 4100'),
 (3, NULL, 'Bijoy Technologies Ltd', 'Arif Hossain', 'arif@bijoytech.com', '+880 1911 100106', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215'),
-(4, NULL, 'Bright Computer Mart', 'Nazmul Hasan', 'sales@brightcomputermart.com', '+880 1611 100107', 'Shop 212, New Market, Mirpur Road, Dhaka 1205');
+(4, NULL, 'Bright Computer Mart', 'Nazmul Hasan', 'sales@brightcomputermart.com', '+880 1611 100107', 'Shop 212, New Market, Mirpur Road, Dhaka 1205'),
+-- The two system accounts below are required, not demo data: every quotation
+-- and every internal order must point at a real client_branch (foreign keys on
+-- quotation.BranchID, invoice.BranchID and order.BranchID). Each has UserID NULL
+-- because neither one is a login — see database/migrate-internal-workflow.sql.
+(5, NULL, 'Walk-in Customers', 'Retail Customer', 'sales@sebabd.com', NULL, 'Dhaka, Bangladesh'),
+(6, NULL, 'SebaBD Internal Operations', 'SebaBD Operations Desk', 'operations@sebabd.com', '+880 1711 100100', 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh');
 
 -- --------------------------------------------------------
 
@@ -98,7 +104,10 @@ INSERT INTO `client_branch` (`BranchID`, `ClientID`, `BranchName`, `BranchAddres
 (1, 1, 'Meghna Infotech - Head Office', 'Plot 12, Road 5, Banani, Dhaka 1213', '+880 1711 100104'),
 (2, 1, 'Meghna Infotech - Uttara Branch', 'House 7, Sector 4, Uttara, Dhaka 1230', '+880 1711 100110'),
 (3, 2, 'Karnaphuli Logistics - Main Hub', 'Holding 45, Agrabad C/A, Chattogram 4100', '+880 1811 100105'),
-(4, 3, 'Bijoy Technologies - Panthapath Office', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215', '+880 1911 100106');
+(4, 3, 'Bijoy Technologies - Panthapath Office', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215', '+880 1911 100106'),
+-- Default branches for the two system accounts above.
+(5, 5, 'Dhaka Sales Counter', 'Dhaka, Bangladesh', NULL),
+(6, 6, 'SebaBD Head Office — Internal', 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh', '+880 1711 100100');
 
 -- --------------------------------------------------------
 
@@ -170,6 +179,8 @@ CREATE TABLE `order` (
   `OrderDate` datetime DEFAULT current_timestamp(),
   `TotalAmount` decimal(12,2) NOT NULL,
   `OrderStatus` varchar(50) DEFAULT 'Pending',
+  `OrderType` varchar(20) NOT NULL DEFAULT 'Retail',
+  `BranchID` int(11) DEFAULT NULL,
   `ShippingAddress` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -177,11 +188,14 @@ CREATE TABLE `order` (
 -- Dumping data for table `order`
 --
 
-INSERT INTO `order` (`OrderID`, `UserID`, `OrderDate`, `TotalAmount`, `OrderStatus`, `ShippingAddress`) VALUES
-(1, 2, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Plot 12, Road 5, Banani, Dhaka 1213'),
-(2, 2, '2024-03-05 14:30:00', 132000.00, 'Processing', 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
-(3, 1, '2024-03-10 09:00:00', 24000.00, 'Pending', 'Flat 4B, Green Road, Dhaka 1205'),
-(4, 2, '2024-03-12 16:45:00', 288000.00, 'Completed', 'Holding 9, Agrabad C/A, Chattogram 4100');
+-- Existing orders are customer orders: OrderType 'Retail', booked to no branch
+-- (a retail order hangs off the user who placed it). A staff/stores order is
+-- written as 'Internal' with BranchID = the SebaBD internal branch.
+INSERT INTO `order` (`OrderID`, `UserID`, `OrderDate`, `TotalAmount`, `OrderStatus`, `OrderType`, `BranchID`, `ShippingAddress`) VALUES
+(1, 2, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Retail', NULL, 'Plot 12, Road 5, Banani, Dhaka 1213'),
+(2, 2, '2024-03-05 14:30:00', 132000.00, 'Processing', 'Retail', NULL, 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
+(3, 1, '2024-03-10 09:00:00', 24000.00, 'Pending', 'Retail', NULL, 'Flat 4B, Green Road, Dhaka 1205'),
+(4, 2, '2024-03-12 16:45:00', 288000.00, 'Completed', 'Retail', NULL, 'Holding 9, Agrabad C/A, Chattogram 4100');
 
 -- --------------------------------------------------------
 
@@ -428,6 +442,7 @@ CREATE TABLE `user` (
   `Email` varchar(255) NOT NULL,
   `FullName` varchar(255) NOT NULL,
   `Phone` varchar(50) DEFAULT NULL,
+  `IsActive` tinyint(1) NOT NULL DEFAULT 1,
   `CreatedAt` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -435,11 +450,13 @@ CREATE TABLE `user` (
 -- Dumping data for table `user`
 --
 
-INSERT INTO `user` (`UserID`, `RoleID`, `Username`, `PasswordHash`, `Email`, `FullName`, `Phone`, `CreatedAt`) VALUES
-(1, 1, 'admin', '$2y$10$sg9qJdZ9Z48VVpM45KJIuOVW.LzNERCltRXHbTPsl/wSpFtIBSD16', 'mahmudul.hasan@sebabd.com', 'Mahmudul Hasan', '+880 1711 100101', '2026-09-25 12:37:17'),
-(2, 2, 'sales', '$2y$10$ngPNRoDB.3UT5gHmj4XJtuOfSFvrhCYFanBJNle2gqCuC7eN9Y/l.', 'nusrat.jahan@sebabd.com', 'Nusrat Jahan', '+880 1811 100102', '2026-09-25 12:37:17'),
-(3, 3, 'inventory', '$2y$10$Ia.o8s6YeAmeFh1yNGSbhe7XNnU2q1ZXOmK.CrjUNcJCA0L6EFrzq', 'tanvir.ahmed@sebabd.com', 'Tanvir Ahmed', '+880 1911 100103', '2026-09-25 12:37:17'),
-(4, 5, 'client', '$2y$10$wsOwK/s2pfikbrjdlSz/P.ECSf/9q4VCeBLIOo8O9g.3ttgzKIf0y', 'contact@meghnainfotech.com', 'Farhana Rahman', '+880 1711 100104', '2026-09-25 12:37:17');
+-- IsActive 1 = may sign in. An account is deactivated (0) rather than deleted
+-- once it has placed orders or issued documents, because those rows name it.
+INSERT INTO `user` (`UserID`, `RoleID`, `Username`, `PasswordHash`, `Email`, `FullName`, `Phone`, `IsActive`, `CreatedAt`) VALUES
+(1, 1, 'admin', '$2y$10$sg9qJdZ9Z48VVpM45KJIuOVW.LzNERCltRXHbTPsl/wSpFtIBSD16', 'mahmudul.hasan@sebabd.com', 'Mahmudul Hasan', '+880 1711 100101', 1, '2026-09-25 12:37:17'),
+(2, 2, 'sales', '$2y$10$ngPNRoDB.3UT5gHmj4XJtuOfSFvrhCYFanBJNle2gqCuC7eN9Y/l.', 'nusrat.jahan@sebabd.com', 'Nusrat Jahan', '+880 1811 100102', 1, '2026-09-25 12:37:17'),
+(3, 3, 'inventory', '$2y$10$Ia.o8s6YeAmeFh1yNGSbhe7XNnU2q1ZXOmK.CrjUNcJCA0L6EFrzq', 'tanvir.ahmed@sebabd.com', 'Tanvir Ahmed', '+880 1911 100103', 1, '2026-09-25 12:37:17'),
+(4, 5, 'client', '$2y$10$wsOwK/s2pfikbrjdlSz/P.ECSf/9q4VCeBLIOo8O9g.3ttgzKIf0y', 'contact@meghnainfotech.com', 'Farhana Rahman', '+880 1711 100104', 1, '2026-09-25 12:37:17');
 
 -- --------------------------------------------------------
 
@@ -511,7 +528,8 @@ ALTER TABLE `invoice_item`
 --
 ALTER TABLE `order`
   ADD PRIMARY KEY (`OrderID`),
-  ADD KEY `UserID` (`UserID`);
+  ADD KEY `UserID` (`UserID`),
+  ADD KEY `BranchID` (`BranchID`);
 
 --
 -- Indexes for table `order_item`
@@ -632,7 +650,8 @@ ALTER TABLE `invoice_item`
 -- Constraints for table `order`
 --
 ALTER TABLE `order`
-  ADD CONSTRAINT `order_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `user` (`UserID`);
+  ADD CONSTRAINT `order_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `user` (`UserID`),
+  ADD CONSTRAINT `order_ibfk_2` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `order_item`
@@ -691,6 +710,28 @@ ALTER TABLE `quotation_item`
 --
 ALTER TABLE `user`
   ADD CONSTRAINT `user_ibfk_1` FOREIGN KEY (`RoleID`) REFERENCES `role` (`RoleID`);
+--
+-- Triggers
+--
+-- Warranty is a product fact supplied by the vendor, not a sales decision:
+-- quotation_item.WarrantyMonths always equals its product's DefaultWarrantyMonths.
+-- The application no longer sends this value, and these triggers make the
+-- database itself enforce the rule (see database/migrate-internal-workflow.sql).
+--
+DROP TRIGGER IF EXISTS `quotation_item_warranty_bi`;
+CREATE TRIGGER `quotation_item_warranty_bi` BEFORE INSERT ON `quotation_item`
+FOR EACH ROW
+SET NEW.`WarrantyMonths` = (
+    SELECT `DefaultWarrantyMonths` FROM `product` WHERE `ProductID` = NEW.`ProductID`
+);
+
+DROP TRIGGER IF EXISTS `quotation_item_warranty_bu`;
+CREATE TRIGGER `quotation_item_warranty_bu` BEFORE UPDATE ON `quotation_item`
+FOR EACH ROW
+SET NEW.`WarrantyMonths` = (
+    SELECT `DefaultWarrantyMonths` FROM `product` WHERE `ProductID` = NEW.`ProductID`
+);
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

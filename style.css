@@ -390,7 +390,8 @@ a {
     grid-template-columns: minmax(0, 1fr) 90px 150px auto;
 }
 
-/* Quotations and invoices also record a warranty length per line. */
+/* A quotation line also shows a warranty length — read-only, since it comes
+   from the product rather than from whoever is filling the form in. */
 .line-item-grid.has-warranty {
     grid-template-columns: minmax(0, 1fr) 80px 120px 110px 140px auto;
 }
@@ -411,6 +412,26 @@ a {
     .line-cell-total {
         grid-column: 1 / -1;
     }
+}
+
+/* Warranty is supplied by the product (product.DefaultWarrantyMonths), not
+   typed per line, so the cell shows the catalog value as text: it reads like a
+   field, but there is nothing to edit and nothing the sales team can change. */
+.line-warranty-readonly {
+    display: block;
+    padding: 0.375rem 0.625rem;
+    min-height: calc(1.5em + 0.75rem + 2px);
+    border: 1px dashed var(--border);
+    border-radius: 0.375rem;
+    background: var(--surface-soft);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-align: center;
+}
+
+.line-warranty-readonly.is-fixed {
+    color: var(--accent-strong);
+    border-style: solid;
 }
 
 .line-total {

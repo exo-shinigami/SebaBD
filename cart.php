@@ -13,6 +13,13 @@
  * is raised and the units are attached (see admin-invoices.php), because the
  * money and the goods have to move together.
  *
+ * Two channels share this one form (see order_type_for() in helpers.php):
+ *
+ *   Retail    a customer ordering for themselves — OrderType 'Retail', no branch
+ *   Internal  a signed-in staff member ordering for SebaBD — OrderType
+ *             'Internal', booked to the internal house branch, so the order is
+ *             tracked as the company's own purchase instead of a customer sale.
+ *
  * A basket may hold more than is on the shelf: the store sources to order, so
  * the cart says so plainly instead of refusing the sale, and the back office
  * sees exactly which lines need buying in.
@@ -164,12 +171,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ajax_errors($errors);
             } else {
                 try {
-                    $orderId = db_transaction($pdo, function (PDO $tx) use ($user, $lines, $totals, $address, $note) {
+                    // Staff buy for SebaBD, everyone else buys for themselves.
+                    $orderType = order_type_for($user);
+
+                    $orderId = db_transaction($pdo, function (PDO $tx) use ($user, $lines, $totals, $address, $note, $orderType) {
                         $orderId = db_insert($tx, 'order', [
                             'UserID'          => (int) $user['UserID'],
                             'OrderDate'       => date('Y-m-d H:i:s'),
                             'TotalAmount'     => $totals['subtotal'],
                             'OrderStatus'     => 'Pending',
+                            'OrderType'       => $orderType,
+                            // NULL for a customer order; the internal branch for a
+                            // staff order, so the goods and the paperwork agree.
+                            'BranchID'        => order_branch_id($tx, $orderType),
                             'ShippingAddress' => $address . ($note !== '' ? "\n\nNote: " . $note : ''),
                         ], 'OrderID');
 
@@ -188,8 +202,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     cart_clear();
                     clear_old();
-                    flash_set('success', 'Thank you — order #' . $orderId . ' has been placed. '
-                        . 'The sales team confirms it and raises the invoice next.');
+                    flash_set('success', $orderType === ORDER_TYPE_INTERNAL
+                        ? 'Internal order #' . $orderId . ' created — booked to '
+                            . system_accounts()['internal']['branch'] . '. It is kept apart from customer orders in the back office.'
+                        : 'Thank you — order #' . $orderId . ' has been placed. '
+                            . 'The sales team confirms it and raises the invoice next.');
                     post_success('order-detail.php?id=' . $orderId . '&placed=1');
                 } catch (Throwable $e) {
                     $errors[] = 'The order could not be saved: ' . $e->getMessage();
@@ -410,6 +427,14 @@ $page_title = 'Your basket';
           </div>
           <?php endif; ?>
 
+          <?php if ($user && is_staff_user($user)): ?>
+          <div class="alert alert-light border small">
+            <i class="fa-solid fa-building-shield me-1"></i>
+            You are signed in as staff, so this is recorded as an <strong>internal</strong> order for
+            <?= htmlspecialchars(system_accounts()['internal']['branch']) ?> rather than a customer sale.
+          </div>
+          <?php endif; ?>
+
           <?php if (!$user): ?>
           <div class="alert alert-light border small">
             <i class="fa-solid fa-user-lock me-1"></i>You are not signed in. Your basket is kept — sign in
@@ -455,7 +480,7 @@ $page_title = 'Your basket';
 
           <hr class="my-4">
           <div class="small text-muted">
-            <p class="mb-1"><i class="fa-solid fa-shield-halved me-1"></i>Signed in as staff? Orders placed here belong to your own account.</p>
+            <p class="mb-1"><i class="fa-solid fa-shield-halved me-1"></i>Signed in as staff? Your order is filed as an internal SebaBD order, separate from customer orders.</p>
             <p class="mb-0">Need a formal quote first? <a href="quotation-request.php">Request a quotation</a> and a sales manager will price it for your company.</p>
           </div>
         </div>

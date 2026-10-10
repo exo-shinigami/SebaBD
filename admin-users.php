@@ -7,13 +7,19 @@
  * created, because the public registration forms deliberately only ever grant
  * customer roles.
  *
- *   admin-users.php                       every account and the role it holds
+ *   admin-users.php                       every account, the role it holds, active or not
  *   admin-users.php?action=new            create a staff or customer login
  *   admin-users.php?action=edit&id=       change details, role or password
- *   POST intent=create|update|password|delete
+ *   POST intent=create|update|password|delete|activation
  *
- * Two safeguards that are easy to get wrong in an admin screen:
- *   - an administrator cannot remove their own access, and
+ * Account state is a column, not a deletion: `user.IsActive` (0 = cannot sign
+ * in). Turning it off removes the person's access on their very next request,
+ * while every order, quotation, invoice and receipt that names them stays
+ * readable — which is the whole reason the account is not deleted.
+ *
+ * Safeguards that are easy to get wrong in an admin screen:
+ *   - an administrator cannot remove their own access,
+ *   - the last active administrator cannot be deactivated or demoted, and
  *   - an account that still has records (orders, a linked company) is not
  *     deleted out from under them.
  */
@@ -21,6 +27,13 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-users.php');
 $dbUp   = db() !== null;
+// Is the activation column in place? (database/migrate-internal-workflow.sql)
+// Until it is, every account lists as active and the toggle stays hidden, so
+// this page keeps working on a database that has not been migrated yet.
+$activationSupported = $dbUp && user_activation_supported();
+// One fragment for both account queries below: on a migrated database the real
+// column, otherwise a constant, so the pages read identically either way.
+$activeSelect = $activationSupported ? 'u.IsActive' : '1 AS IsActive';
 $action = (string) ($_GET['action'] ?? 'list');
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
@@ -60,6 +73,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $action = 'edit';
         $id     = $userId;
+    } elseif ($intent === 'activation') {
+        // Close or reopen an account. Deactivating is the safe alternative to
+        // deleting: the person can no longer sign in, but nothing they created
+        // loses its owner.
+        $userId   = post_int('user_id');
+        $activate = post_int('is_active') === 1;
+
+        try {
+            $target = db_fetch_all(
+                'SELECT u.UserID, u.Username, u.FullName, r.RoleName
+                 FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+                 WHERE u.UserID = :id',
+                [':id' => $userId]
+            );
+            $activeAdmins = (int) (db_fetch_all(
+                "SELECT COUNT(*) AS n FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+                 WHERE r.RoleName = 'Admin' AND u.IsActive = 1"
+            )[0]['n'] ?? 0);
+
+            if (!$activationSupported) {
+                $errors[] = 'The account state column is missing. Run '
+                          . '<code>database/migrate-internal-workflow.sql</code>, then reload this page.';
+            } elseif (!$target) {
+                $errors[] = 'That account no longer exists.';
+            } elseif (!$activate && $userId === (int) $user['UserID']) {
+                $errors[] = 'You cannot deactivate the account you are signed in with — sign in as another administrator first.';
+            } elseif (!$activate && $target[0]['RoleName'] === 'Admin' && $activeAdmins <= 1) {
+                $errors[] = 'Account “' . $target[0]['Username'] . '” is the only active administrator. '
+                          . 'Deactivating it would leave nobody able to manage users.';
+            } else {
+                db_update($pdo, 'user', ['IsActive' => $activate ? 1 : 0], ['UserID' => $userId]);
+                flash_set('success', 'Account “' . $target[0]['Username'] . '” was '
+                    . ($activate ? 'reactivated — they can sign in again.' : 'deactivated — they can no longer sign in.'));
+                post_success('admin-users.php?action=edit&id=' . $userId);
+            }
+        } catch (Throwable $e) {
+            $errors[] = admin_error_message($e, 'Could not change the account state.');
+        }
+        $action = 'edit';
+        $id     = $userId;
     } elseif ($intent === 'delete') {
         $userId = post_int('user_id');
         try {
@@ -79,7 +132,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ((int) $target[0]['Orders'] > 0) {
                 $errors[] = 'Account “' . $target[0]['Username'] . '” has placed ' . (int) $target[0]['Orders']
                           . ' order(s), so it cannot be deleted — the order history names it. '
-                          . 'Change the account instead if it is no longer needed.';
+                          . ($activationSupported
+                              ? 'Deactivate it instead if the person has left.'
+                              : 'Change the account instead if it is no longer needed.');
             } elseif ($target[0]['ClientID'] !== null) {
                 // client.UserID is ON DELETE SET NULL, so deleting would silently
                 // orphan the company's login. Ask for the link to be removed first.
@@ -135,6 +190,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors[] = 'Choose one of the listed roles.';
             } elseif ($editId === (int) $user['UserID'] && $role['RoleName'] !== 'Admin') {
                 $errors[] = 'You cannot change your own role away from Admin — sign in as another administrator first.';
+            } elseif ($editId > 0 && $role['RoleName'] !== 'Admin' && $activationSupported) {
+                // Demoting the last administrator would lock the back office out
+                // just as surely as deactivating it.
+                $wasAdmin = db_fetch_all(
+                    'SELECT u.IsActive, r.RoleName FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+                     WHERE u.UserID = :id',
+                    [':id' => $editId]
+                );
+                $activeAdmins = (int) (db_fetch_all(
+                    "SELECT COUNT(*) AS n FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+                     WHERE r.RoleName = 'Admin' AND u.IsActive = 1"
+                )[0]['n'] ?? 0);
+                if (($wasAdmin[0]['RoleName'] ?? '') === 'Admin'
+                    && (int) ($wasAdmin[0]['IsActive'] ?? 1) === 1
+                    && $activeAdmins <= 1) {
+                    $errors[] = 'This is the only active administrator, so it has to keep the Admin role. '
+                              . 'Give another account the Admin role first.';
+                }
             }
         }
 
@@ -203,7 +276,8 @@ if ($dbUp) {
 
     if ($action === 'edit' && $id > 0) {
         $found = db_fetch_all(
-            'SELECT u.UserID, u.RoleID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt, r.RoleName
+            'SELECT u.UserID, u.RoleID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt,
+                    ' . $activeSelect . ', r.RoleName
              FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
              WHERE u.UserID = :id',
             [':id' => $id]
@@ -245,14 +319,14 @@ if ($dbUp) {
 
     $rows = db_fetch_all(
         'SELECT u.UserID, u.RoleID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt,
-                r.RoleName,
+                ' . $activeSelect . ', r.RoleName,
                 c.ClientID, c.CompanyName,
                 (SELECT COUNT(*) FROM `order` o WHERE o.UserID = u.UserID) AS Orders,
                 (SELECT COALESCE(SUM(o.TotalAmount), 0) FROM `order` o WHERE o.UserID = u.UserID) AS Spent
          FROM `user` u
          JOIN `role` r ON r.RoleID = u.RoleID
          LEFT JOIN client c ON c.UserID = u.UserID' . $whereSql . '
-         ORDER BY u.RoleID, u.FullName
+         ORDER BY ' . ($activationSupported ? 'u.IsActive' : '1') . ' DESC, u.RoleID, u.FullName
          LIMIT ' . $userPage['perPage'] . ' OFFSET ' . $userPage['offset'],
         $params
     );
@@ -263,7 +337,8 @@ if ($dbUp) {
                   WHERE r.RoleName IN ('Admin', 'Sales Manager', 'Inventory Manager')) AS Staff,
                 (SELECT COUNT(*) FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
                   WHERE r.RoleName IN ('Client Account', 'B2B Client Account')) AS Customers,
-                (SELECT COUNT(*) FROM client WHERE UserID IS NOT NULL) AS Linked"
+                (SELECT COUNT(*) FROM client WHERE UserID IS NOT NULL) AS Linked,
+                (SELECT COUNT(*) FROM `user` u WHERE " . ($activationSupported ? 'u.IsActive = 0' : '1 = 0') . ") AS Disabled"
     );
     $totals = $totals[0] ?? [];
 }
@@ -307,7 +382,16 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
     <?= report_kpi('Staff', number_format((int) ($totals['Staff'] ?? 0)), 'Admin, sales and inventory', 'fa-user-shield') ?>
     <?= report_kpi('Customers', number_format((int) ($totals['Customers'] ?? 0)), 'Retail and corporate logins', 'fa-user-tie') ?>
     <?= report_kpi('Linked to a company', number_format((int) ($totals['Linked'] ?? 0)), 'The optional 1:1 in the schema', 'fa-link') ?>
+    <?= report_kpi('Deactivated', number_format((int) ($totals['Disabled'] ?? 0)), 'Sign-in closed, history kept', 'fa-user-slash') ?>
   </div>
+
+  <?php if (!$activationSupported): ?>
+  <div class="alert alert-warning">
+    <i class="fa-solid fa-database me-2"></i>
+    Accounts cannot be deactivated yet: the <code>user</code> table has no <code>IsActive</code> column.
+    Run <code>database/migrate-internal-workflow.sql</code> once, then reload this page.
+  </div>
+  <?php endif; ?>
 
   <form class="report-filter mb-3" method="get" action="admin-users.php">
     <div class="report-filter-fields">
@@ -336,9 +420,10 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
   <?= partial_render('partials/admin-list.php', [
       'panel_title' => 'Accounts',
       'panel_sub'   => 'Grouped by role. A customer account can be linked to one company; staff accounts never are.',
-      'columns'     => ['#', 'Person', 'Contact', 'Role', 'Company', 'Orders', ''],
-      'rows'        => array_map(function ($row) use ($user) {
+      'columns'     => ['#', 'Person', 'Contact', 'Role', 'State', 'Company', 'Orders', ''],
+      'rows'        => array_map(function ($row) use ($user, $activationSupported) {
           $isSelf = (int) $row['UserID'] === (int) $user['UserID'];
+          $active = (int) ($row['IsActive'] ?? 1) === 1;
 
           return [
               '<span class="text-muted">' . (int) $row['UserID'] . '</span>',
@@ -349,6 +434,9 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
               htmlspecialchars($row['Email'])
                   . ($row['Phone'] ? '<small class="d-block text-muted">' . htmlspecialchars($row['Phone']) . '</small>' : ''),
               status_badge((string) $row['RoleName'], htmlspecialchars((string) $row['RoleName'])),
+              $active
+                  ? '<span class="report-badge report-badge-ok">Active</span>'
+                  : '<span class="report-badge report-badge-danger">Deactivated</span>',
               $row['ClientID'] !== null
                   ? '<a class="text-decoration-none" href="admin-customers.php?action=edit&id=' . (int) $row['ClientID'] . '">'
                       . htmlspecialchars((string) $row['CompanyName']) . '</a>'
@@ -361,6 +449,20 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
               '<div class="admin-actions-cell">'
                   . '<a class="btn btn-sm btn-outline-secondary" href="admin-users.php?action=edit&id=' . (int) $row['UserID'] . '">'
                       . '<i class="fa-solid fa-pen"></i><span class="visually-hidden">Edit</span></a> '
+                  . ($activationSupported
+                      ? '<form method="post" action="admin-users.php" class="d-inline"'
+                          . ' onsubmit="return confirm(\'' . ($active ? 'Deactivate' : 'Reactivate') . ' account “'
+                          . htmlspecialchars($row['Username'], ENT_QUOTES) . '”?\');">'
+                          . csrf_field()
+                          . '<input type="hidden" name="intent" value="activation">'
+                          . '<input type="hidden" name="user_id" value="' . (int) $row['UserID'] . '">'
+                          . '<input type="hidden" name="is_active" value="' . ($active ? 0 : 1) . '">'
+                          . '<button class="btn btn-sm btn-outline-' . ($active ? 'warning' : 'success') . '" type="submit"'
+                          . ($isSelf ? ' disabled title="You cannot deactivate your own account"' : '')
+                          . '><i class="fa-solid fa-' . ($active ? 'user-slash' : 'user-check') . '"></i>'
+                          . '<span class="visually-hidden">' . ($active ? 'Deactivate' : 'Reactivate') . '</span></button>'
+                          . '</form> '
+                      : '')
                   . '<form method="post" action="admin-users.php" class="d-inline"'
                       . ' onsubmit="return confirm(\'Delete account “' . htmlspecialchars($row['Username'], ENT_QUOTES) . '”?\');">'
                       . csrf_field()
@@ -386,7 +488,8 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
       'pagination'   => pagination_links($userPage, $listUrl),
       'note'         => '<code>user.RoleID</code> points at exactly one <code>role</code> row, and <code>client.UserID</code> is a '
                       . '<code>UNIQUE</code> key — which is how “one login, at most one company” is enforced by the database rather '
-                      . 'than by this page.',
+                      . 'than by this page. Deactivating sets <code>user.IsActive = 0</code>: the account keeps every order and '
+                      . 'document it created, but the person cannot sign in.',
   ]) ?>
 
   <?php else:
@@ -406,6 +509,7 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
       ];
       $shownId = $isEdit ? (int) $edit['UserID'] : $nextFreeId;
       $isSelf  = $isEdit && $shownId === (int) $user['UserID'];
+      $editIsActive = $isEdit && (int) ($edit['IsActive'] ?? 1) === 1;
   ?>
 
   <div class="row g-4">
@@ -423,7 +527,16 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
         <?php if ($isSelf): ?>
         <div class="alert alert-light border">
           <i class="fa-solid fa-circle-info me-1"></i>
-          This is the account you are signed in with, so its role is locked to Admin and it cannot be deleted.
+          This is the account you are signed in with, so its role is locked to Admin and it cannot be deleted
+          or deactivated.
+        </div>
+        <?php endif; ?>
+
+        <?php if ($isEdit && !$editIsActive): ?>
+        <div class="alert alert-warning">
+          <i class="fa-solid fa-user-slash me-2"></i>
+          <strong>This account is deactivated.</strong> It cannot sign in, and a session it already holds is ended on
+          its next request. Everything it created — orders, quotations, invoices, receipts — is untouched.
         </div>
         <?php endif; ?>
 
@@ -537,6 +650,31 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
         <?= admin_detail_row('Can open', implode(' · ', array_map('htmlspecialchars', in_array($edit['RoleName'], staff_roles(), true)
             ? ['Storefront', 'Dashboard', 'Back office', 'Reports']
             : ['Storefront', 'Dashboard', 'Own documents']))) ?>
+        <?= admin_detail_row('Account state', $editIsActive
+            ? '<span class="report-badge report-badge-ok">Active — may sign in</span>'
+            : '<span class="report-badge report-badge-danger">Deactivated — sign-in closed</span>') ?>
+
+        <?php if ($activationSupported && !$isSelf): ?>
+        <form method="post" action="admin-users.php" class="mt-3" data-ajax>
+          <?= csrf_field() ?>
+          <input type="hidden" name="intent" value="activation">
+          <input type="hidden" name="user_id" value="<?= (int) $edit['UserID'] ?>">
+          <input type="hidden" name="is_active" value="<?= $editIsActive ? 0 : 1 ?>">
+          <button class="btn btn-<?= $editIsActive ? 'outline-warning' : 'outline-success' ?> w-100" type="submit">
+            <i class="fa-solid fa-<?= $editIsActive ? 'user-slash' : 'user-check' ?> me-2"></i>
+            <?= $editIsActive ? 'Deactivate this account' : 'Reactivate this account' ?>
+          </button>
+          <p class="text-muted small mb-0 mt-2">
+            <?= $editIsActive
+                ? 'Deactivation keeps the account and its history, but closes sign-in for good until someone reopens it.'
+                : 'Sign-in works again immediately, with the password already on file.' ?>
+          </p>
+        </form>
+        <?php elseif ($activationSupported && $isSelf): ?>
+        <p class="text-muted small mb-0 mt-3">
+          Your own account stays active. Another administrator can close it if you leave.
+        </p>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
 

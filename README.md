@@ -24,7 +24,7 @@ results.
 | --- | --- |
 | Database | `e_commerce` (MySQL / MariaDB, InnoDB, `utf8mb4`) |
 | Tables | 17 (catalog, customers, stock, orders, quotations, billing, procurement) |
-| Foreign keys | 22, declared with explicit `ON DELETE` behaviour |
+| Foreign keys | 23, declared with explicit `ON DELETE` behaviour |
 | Primary keys | Explicit integer keys (`OrderID`, `ProductID`, …) — no `AUTO_INCREMENT` |
 | Server language | PHP 8.1+ (verified on 8.2.12) |
 | Database access | PDO with `pdo_mysql`, native prepared statements |
@@ -65,6 +65,18 @@ If the database was created before the separate B2B role existed, run the migrat
 ```powershell
 C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-b2b-client-role.sql
 ```
+
+And if it was created before walk-in quotations, internal orders and account deactivation
+existed, run the second migration once as well. It adds `user.IsActive`, `order.OrderType` and
+`order.BranchID`, creates the two house accounts described below, repairs any quotation line
+whose warranty differs from its product, and installs the warranty trigger:
+
+```powershell
+C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-internal-workflow.sql
+```
+
+Both migration files are guarded, so running one twice is harmless. A database imported from
+the current `database/e_commerce.sql` already contains all of this and needs neither.
 
 ### 3. Check the connection settings
 
@@ -117,6 +129,31 @@ Accounts created through `register.php` become `Client Account` (role 4); accoun
 through `b2b-registration.php` become `B2B Client Account` (role 5). Staff roles can only be
 assigned by an administrator — public registration never grants them.
 
+### Walk-in, customer and internal work
+
+Every quotation and every order is filed somewhere, and the application decides where from
+who is acting — never from what the form posted. Three paths share the same two forms:
+
+| Who is acting | Quotation (`quotation.BranchID`) | Order (`order.OrderType` / `order.BranchID`) |
+| --- | --- | --- |
+| A visitor with no company account | the **Walk-in Customers** house account (`Dhaka Sales Counter`) | — (orders need a login) |
+| A signed-in customer | one of their own company's branches | `Retail`, `BranchID` `NULL` — the order hangs off the account |
+| A signed-in staff member (Admin / Sales / Inventory) | the **SebaBD Internal Operations** house account (`SebaBD Head Office — Internal`) | `Internal`, `BranchID` = that same branch |
+
+Both house accounts are ordinary `client` rows with no login (`client.UserID` is `NULL`), and
+they always exist, so `quotation.BranchID`, `invoice.BranchID` and `order.BranchID` can never
+fail their foreign key. They are seeded by the migration, and `walkin_branch_id()` /
+`internal_branch_id()` in `helpers.php` create them on demand inside the same transaction if a
+row is ever missing. The back office labels them: quotations and orders show an **Internal**
+or **Walk-in** badge, and `admin-orders.php` can filter on `?channel=Internal`.
+
+Two more rules the application and the database agree on:
+
+| Rule | Where it is enforced |
+| --- | --- |
+| `quotation_item.WarrantyMonths` is always the product's `DefaultWarrantyMonths` | The forms show it read-only, the server re-reads it from the catalog (a posted value is ignored), and the `quotation_item_warranty_bi/bu` triggers correct any other value — including one typed straight into phpMyAdmin |
+| Deactivated accounts stay in the database | `user.IsActive = 0` blocks sign-in (and ends a session already open) while every order, quotation, invoice and receipt that names the account stays readable. `admin-users.php` toggles it, and refuses to close your own account or the last active administrator |
+
 ---
 
 ## Database design
@@ -151,6 +188,7 @@ erDiagram
     USER             |o--o| CLIENT            : "may be linked to"
     CLIENT           ||--o{ CLIENT_BRANCH     : "operates"
     CLIENT_BRANCH    ||--o{ QUOTATION         : "receives"
+    CLIENT_BRANCH    |o--o{ ORDER             : "books (internal orders)"
     CLIENT_BRANCH    ||--o{ INVOICE           : "is billed on"
     QUOTATION        ||--o{ QUOTATION_ITEM    : "prices"
     PRODUCT          ||--o{ QUOTATION_ITEM    : "is quoted in"
@@ -181,7 +219,7 @@ The diagram is grouped around four business processes:
 
 ### Schema diagram (logical/physical)
 
-Same 22 foreign keys, now with columns. `PK` primary key, `FK` foreign key, `UK` unique key.
+Same 23 foreign keys, now with columns. `PK` primary key, `FK` foreign key, `UK` unique key.
 Physical table names are lowercase singular (`order`, `order_item`, …).
 
 ```mermaid
@@ -198,6 +236,7 @@ erDiagram
         varchar Email UK
         varchar FullName
         varchar Phone
+        tinyint IsActive
         datetime CreatedAt
     }
     CLIENT {
@@ -253,6 +292,8 @@ erDiagram
         datetime OrderDate
         decimal TotalAmount
         varchar OrderStatus
+        varchar OrderType
+        int BranchID FK
         text ShippingAddress
     }
     ORDER_ITEM {
@@ -330,6 +371,7 @@ erDiagram
     USER             |o--o| CLIENT            : "may be linked to"
     CLIENT           ||--o{ CLIENT_BRANCH     : "operates"
     CLIENT_BRANCH    ||--o{ QUOTATION         : "receives"
+    CLIENT_BRANCH    |o--o{ ORDER             : "books (internal orders)"
     CLIENT_BRANCH    ||--o{ INVOICE           : "is billed on"
     QUOTATION        ||--o{ QUOTATION_ITEM    : "prices"
     PRODUCT          ||--o{ QUOTATION_ITEM    : "is quoted in"
@@ -394,12 +436,14 @@ role decides what the account may open.
 | `Email` | `varchar(255)` | UK | Also accepted as a login identifier |
 | `FullName` | `varchar(255)` | | Shown in the header, dashboard and orders |
 | `Phone` | `varchar(50)` | | Optional |
+| `IsActive` | `tinyint(1)` | | Defaults to `1`. `0` = the account cannot sign in; its history is kept. Managed in `admin-users.php` |
 | `CreatedAt` | `datetime` | | Defaults to `CURRENT_TIMESTAMP` |
 
 #### Customers
 
-**`client`** — a company (or the shared walk-in customer). A client may own a login, which is
-why `UserID` is *nullable but unique*.
+**`client`** — a company. A client may own a login, which is why `UserID` is *nullable but
+unique*; the two system accounts (`Walk-in Customers`, `SebaBD Internal Operations`) are rows
+here with `UserID = NULL`, and they are the reason a quotation or order never lacks a branch.
 
 | Column | Type | Key | Notes |
 | --- | --- | --- | --- |
@@ -485,6 +529,8 @@ word `order`, so every query uses `` `order` ``.)
 | `OrderDate` | `datetime` | | Defaults to `CURRENT_TIMESTAMP` |
 | `TotalAmount` | `decimal(12,2)` | | Header total; equals the sum of its `order_item` rows |
 | `OrderStatus` | `varchar(50)` | | Defaults to `Pending`; also `Processing`, `Completed`, `Cancelled` |
+| `OrderType` | `varchar(20)` | | Defaults to `Retail`. `Internal` = SebaBD ordering for itself (placed by a staff account), so the two pipelines stay apart |
+| `BranchID` | `int` | FK → `client_branch` | `ON DELETE SET NULL`. `NULL` for a retail order (it hangs off the user); the internal house branch for an internal order |
 | `ShippingAddress` | `text` | | Typed by the customer at checkout |
 
 **`order_item`** — one product line of an order. The classic *weak entity* of the order:
@@ -513,8 +559,10 @@ it only exists as part of a header, so `OrderID` cascades.
 | `AmountInWords` | `text` | | Printed wording, produced by `amount_in_words()` |
 | `Status` | `varchar(50)` | | Defaults to `Pending`; also `Accepted`, `Rejected` |
 
-**`quotation_item`** — quotation lines. Unlike an order line it also carries the **warranty**
-agreed per line, because warranties are negotiated per item in B2B sales.
+**`quotation_item`** — quotation lines. Unlike an order line it also records the **warranty**
+that applies to the line — which is a product fact even here: `WarrantyMonths` is always the
+product's own `DefaultWarrantyMonths`, the figure the vendor supplies. Sales staff cannot edit
+it, and no code path (or hand-written SQL) can write a different number.
 
 | Column | Type | Key | Notes |
 | --- | --- | --- | --- |
@@ -522,7 +570,7 @@ agreed per line, because warranties are negotiated per item in B2B sales.
 | `QuotationNo` | `int` | FK → `quotation` | `ON DELETE CASCADE` |
 | `ProductID` | `int` | FK → `product` | `RESTRICT` |
 | `Quantity`, `UnitPrice`, `TotalPrice` | `int`, `decimal(12,2)`, `decimal(12,2)` | | Priced line, `UnitPrice` snapshotted |
-| `WarrantyMonths` | `int` | | Defaults from the product, overridable per line |
+| `WarrantyMonths` | `int` | | Always `product.DefaultWarrantyMonths` — enforced by the `quotation_item_warranty_bi` / `_bu` triggers, not by the forms |
 
 #### Billing & payments
 
@@ -594,7 +642,7 @@ named `WholesaleUnitPrice` and not just `UnitPrice`.
 
 ### Relationship & cardinality overview
 
-All 22 foreign keys, what they mean and why they exist. *Cardinality* is written from the
+All 23 foreign keys, what they mean and why they exist. *Cardinality* is written from the
 parent (one) side to the child side; *optional?* asks whether the child may leave the column
 `NULL`.
 
@@ -622,6 +670,7 @@ parent (one) side to the child side; *optional?* asks whether the child may leav
 | 20 | `vendor` → `purchase_order` | `VendorID` | 1 : N | No | `RESTRICT` | Purchases are always placed with a known supplier. |
 | 21 | `purchase_order` → `po_item` | `PONo` | 1 : N | No | `CASCADE` | Purchase lines exist only inside their purchase order. |
 | 22 | `product` → `po_item` | `ProductID` | 1 : N | No | `RESTRICT` | What was bought must still be identifiable in the catalog. |
+| 23 | `client_branch` → `order` | `BranchID` | 1 : N | Yes | `SET NULL` | The branch an order is booked to. `NULL` for a customer order (it belongs to the account that placed it); the internal SebaBD branch for a staff order, so SebaBD's own purchases are separated from customer sales. |
 
 #### Integrity constraints at a glance
 
@@ -629,7 +678,7 @@ parent (one) side to the child side; *optional?* asks whether the child may leav
 | --- | --- | --- |
 | Primary key | Every table (17) | Each row is uniquely identifiable; also creates the clustered index InnoDB needs. |
 | Unique key | `role.RoleName`, `user.Username`, `user.Email`, `client.UserID`, `product_instance.SerialNumber`, `invoice.QuotationNo`, `invoice.OrderID` | Business rules that must hold regardless of what the application does: one account per username/email, one login per company, one serial number per unit, one invoice per order/quotation. |
-| Foreign key | 22 columns (see table above) | Referential integrity: child rows can only point at rows that exist. |
+| Foreign key | 23 columns (see table above) | Referential integrity: child rows can only point at rows that exist. |
 | `NOT NULL` | All keys; most business columns | Required data cannot be skipped by a buggy form. |
 | `DEFAULT` | `order.OrderStatus`/`quotation.Status` = `Pending`, `invoice.PaymentStatus` = `DUE`, `product_instance.Status` = `In Stock`, `product.IsSerialized` = `0`, `product.StockQty` = `0`, `CreatedAt`/`OrderDate` = `CURRENT_TIMESTAMP` | New rows start in a sensible, reportable state even if the writer says nothing about that column. |
 | Index | Every foreign key column, plus the unique keys | Joins (`product` ↔ `order_item`, `invoice` ↔ `payment_receipt`) stay fast as data grows. |
@@ -728,7 +777,7 @@ Shared code — helpers.php, db.php, catalog-data.php
   │  sessions/auth, PDO access, catalog presentation, form helpers
   ▼
 MySQL database e_commerce
-  │  17 tables, 22 foreign keys, InnoDB, utf8mb4
+  │  17 tables, 23 foreign keys, InnoDB, utf8mb4
   ▼
 HTML + style.css + assets/*.js
 ```

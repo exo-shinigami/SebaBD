@@ -11,15 +11,22 @@
  *   $catalog        array  products: ProductID, ProductName, StandardPrice,
  *                          DefaultWarrantyMonths, CategoryName, plus the price
  *                          column named by $price_key
- *   $lines          array  existing rows: ['id','qty','price','warranty']
+ *   $lines          array  existing rows: ['id','qty','price']
  *   $price_key      string which catalog column seeds the price (StandardPrice
  *                          for sales documents, WholesaleUnitPrice for POs)
  *   $price_label    string column heading for the price
  *   $qty_label      string column heading for the quantity
- *   $show_warranty  bool   add the warranty-months column
+ *   $show_warranty  bool   add the warranty column (read-only, see below)
  *   $show_price     bool   add the editable price column
  *   $max_rows       int
  *   $blank_rows     int    empty rows to show on a fresh form
+ *
+ * The warranty cell is deliberately *not* a form field. Warranty length comes
+ * from the product — the vendor warrants it and the catalog stores it in
+ * product.DefaultWarrantyMonths — so this control displays the catalog value and
+ * the server re-reads it on save; whatever a browser posts is ignored. The
+ * database trigger in database/migrate-internal-workflow.sql enforces the same
+ * rule, so no code path can write a different number.
  */
 $catalog       = $catalog       ?? [];
 $lines         = $lines         ?? [];
@@ -33,16 +40,25 @@ $blank_rows    = (int) ($blank_rows ?? 3);
 
 $rowCount = max($blank_rows, count($lines));
 
+// Warranty per product, straight from the catalog — the one source of truth for
+// the read-only cell below.
+$warrantyByProduct = [];
+foreach ($catalog as $product) {
+    $warrantyByProduct[(int) $product['ProductID']] = max(0, (int) ($product['DefaultWarrantyMonths'] ?? 0));
+}
+
 /**
  * One row of the editor. Kept as a closure so the same markup serves the rows
  * already on the form and the <template> used by the "add another line" button.
  */
-$renderRow = function (array $line) use ($catalog, $price_key, $price_label, $show_warranty, $show_price, $qty_label): void {
-    $pid      = (int) ($line['id'] ?? 0);
-    $qty      = (int) ($line['qty'] ?? 1);
-    $price    = $line['price'] ?? '';
-    $warranty = $line['warranty'] ?? '';
+$renderRow = function (array $line) use ($catalog, $warrantyByProduct, $price_key, $price_label, $show_warranty, $show_price, $qty_label): void {
+    $pid   = (int) ($line['id'] ?? 0);
+    $qty   = (int) ($line['qty'] ?? 1);
+    $price = $line['price'] ?? '';
+    // Shown only when a product is chosen: the warranty belongs to the product.
+    $warrantyMonths = $pid > 0 ? ($warrantyByProduct[$pid] ?? null) : null;
     ?>
+
     <div class="line-item-row">
       <div class="line-item-grid<?= $show_warranty ? ' has-warranty' : '' ?><?= $show_price ? '' : ' no-price' ?>">
         <div class="line-cell line-cell-product">
@@ -87,8 +103,9 @@ $renderRow = function (array $line) use ($catalog, $price_key, $price_label, $sh
 
         <?php if ($show_warranty): ?>
         <div class="line-cell line-cell-warranty">
-          <label class="form-label">Warranty (mo)</label>
-          <input class="form-control line-warranty" type="number" name="warranty_months[]" min="0" max="240" value="<?= $warranty ?>">
+          <label class="form-label">Warranty</label>
+          <span class="line-warranty-readonly<?= $warrantyMonths !== null ? ' is-fixed' : '' ?>" data-warranty-out
+                title="Product warranty from product.DefaultWarrantyMonths — set by the vendor, not editable here"><?= $warrantyMonths !== null ? (int) $warrantyMonths . ' mo' : '—' ?></span>
         </div>
         <?php endif; ?>
 

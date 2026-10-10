@@ -26,6 +26,17 @@ if ($user) {
     }
 }
 
+/**
+ * How this request is filed — three distinct paths, three distinct owners:
+ *
+ *   internal  a signed-in SebaBD staff member requesting for the company itself
+ *   client    a signed-in company account, using one of its own branches
+ *   walkin    a visitor with no company, filed under the Walk-in house account
+ */
+$filedUnder = is_staff_user($user) ? 'internal'
+    : (($client && $branches) ? 'client' : 'walkin');
+$accounts = system_accounts();
+
 $catalog = db_fetch_all(
     'SELECT p.ProductID, p.ProductName, p.StandardPrice, p.DefaultWarrantyMonths, c.CategoryName
      FROM product p JOIN category c ON c.CategoryID = p.CategoryID
@@ -42,15 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $contactEm  = trim($_POST['contact_email'] ?? '');
     $productIds = array_map('intval', $_POST['product_id'] ?? []);
     $quantities = array_map('intval', $_POST['quantity'] ?? []);
-    $warranties = array_map('intval', $_POST['warranty_months'] ?? []);
 
     keep_old(array_filter([
         'subject' => $subject, 'contact_name' => $contact,
         'contact_phone' => $contactPh, 'contact_email' => $contactEm,
     ]) + [
-        'product_id'      => $productIds,
-        'quantity'        => $quantities,
-        'warranty_months' => $warranties,
+        'product_id' => $productIds,
+        'quantity'   => $quantities,
     ]);
 
     if ($subject === '') $errors[] = 'Please give the quotation a short subject.';
@@ -59,6 +68,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($client && !$branches) {
         $errors[] = 'No branch found for your company — please contact support.';
     }
+
+    // Warranty is a product fact (product.DefaultWarrantyMonths), so the line's
+    // warranty is read from the catalog here — a posted warranty_months value,
+    // if one is sent at all, is ignored on purpose.
+    $warranties = product_warranties($productIds);
 
     $lines = [];
     foreach ($productIds as $i => $pid) {
@@ -76,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lines[] = [
             'product'         => $prod[0],
             'qty'             => min(999, $qty),
-            'warranty_months' => $warranties[$i] ?? (int) $prod[0]['DefaultWarrantyMonths'],
+            'warranty_months' => $warranties[$pid] ?? max(0, (int) $prod[0]['DefaultWarrantyMonths']),
         ];
     }
     if (!$lines) {
@@ -88,79 +102,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Database is offline right now — please try again shortly.';
     } elseif (!$errors) {
         try {
-            // Branch: from the logged-in client, or the shared "Walk-in"
-            // client/branch pair, created on first use so the FK always holds.
-            if ($client && $branches) {
-                $branchId = in_array($branchId, array_column($branches, 'BranchID'), true)
-                    ? $branchId : (int) $branches[0]['BranchID'];
-            } else {
-                $walkIn = db_fetch_all(
-                    "SELECT b.BranchID FROM client_branch b
-                     JOIN client c ON c.ClientID = b.ClientID
-                     WHERE c.CompanyName = 'Walk-in Customers' LIMIT 1"
-                );
-                if ($walkIn) {
-                    $branchId = (int) $walkIn[0]['BranchID'];
+            // One transaction for the lot: resolving the branch and writing the
+            // quotation succeed or fail together, so a half-filed request (or a
+            // house account created for a quotation that was never written)
+            // cannot be left behind.
+            $result = db_transaction($pdo, function (PDO $tx) use ($filedUnder, $branches, $branchId, $subject, $lines, $contact, $contactPh, $contactEm) {
+                if ($filedUnder === 'internal') {
+                    // Staff are buying for SebaBD, not for a customer: the request
+                    // is booked to the internal house account.
+                    $branch = internal_branch_id($tx);
+                } elseif ($filedUnder === 'client') {
+                    $allowed = array_map('intval', array_column($branches, 'BranchID'));
+                    $branch  = in_array($branchId, $allowed, true) ? $branchId : (int) $allowed[0];
                 } else {
-                    $walkClientId = next_id($pdo, 'client', 'ClientID');
-                    $pdo->prepare(
-                        'INSERT INTO client (ClientID, UserID, CompanyName, ContactPerson, Email, Phone, Address)
-                         VALUES (:id, NULL, :cn, :cp, :e, NULL, :ad)'
-                    )->execute([
-                        ':id' => $walkClientId, ':cn' => 'Walk-in Customers',
-                        ':cp' => $contact !== '' ? $contact : 'Retail Customer',
-                        ':e'  => $contactEm !== '' ? $contactEm : 'sales@sebabd.com',
-                        ':ad' => 'Dhaka, Bangladesh',
-                    ]);
-                    $branchId = next_id($pdo, 'client_branch', 'BranchID');
-                    $pdo->prepare(
-                        'INSERT INTO client_branch (BranchID, ClientID, BranchName, BranchAddress, ContactNo)
-                         VALUES (:id, :cid, :bn, :ba, :bc)'
-                    )->execute([
-                        ':id' => $branchId, ':cid' => $walkClientId,
-                        ':bn' => 'Dhaka Sales Counter', ':ba' => 'Dhaka, Bangladesh',
-                        ':bc' => $contactPh !== '' ? $contactPh : null,
+                    // No company on this request: file it under the shared
+                    // Walk-in account. It is seeded by the migration and created
+                    // here on first use, so quotation.BranchID always resolves.
+                    $branch = walkin_branch_id($tx, [
+                        'contact' => $contact !== '' ? $contact : 'Retail Customer',
+                        'email'   => $contactEm !== '' ? $contactEm : 'sales@sebabd.com',
+                        'phone'   => $contactPh !== '' ? $contactPh : null,
                     ]);
                 }
-            }
 
-            $total = 0.0;
-            foreach ($lines as $l) {
-                $total += (float) $l['product']['StandardPrice'] * $l['qty'];
-            }
+                $total = 0.0;
+                foreach ($lines as $line) {
+                    $total += (float) $line['product']['StandardPrice'] * $line['qty'];
+                }
+                $total = round($total, 2);
 
-            $pdo->beginTransaction();
-            $qno = next_id($pdo, 'quotation', 'QuotationNo');
-            $pdo->prepare(
-                'INSERT INTO quotation (QuotationNo, BranchID, QuotationDate, Subject, TotalAmount, AmountInWords, Status)
-                 VALUES (:q, :b, CURRENT_DATE, :s, :t, :w, :st)'
-            )->execute([
-                ':q' => $qno, ':b' => $branchId, ':s' => $subject,
-                ':t' => $total, ':w' => amount_in_words($total), ':st' => 'Pending',
-            ]);
+                $qno = db_insert($tx, 'quotation', [
+                    'BranchID'      => $branch,
+                    'QuotationDate' => date('Y-m-d'),
+                    'Subject'       => $subject,
+                    'TotalAmount'   => $total,
+                    'AmountInWords' => amount_in_words($total),
+                    'Status'        => 'Pending',
+                ], 'QuotationNo');
 
-            $itemStmt = $pdo->prepare(
-                'INSERT INTO quotation_item (QuotationItemID, QuotationNo, ProductID, Quantity, UnitPrice, TotalPrice, WarrantyMonths)
-                 VALUES (:id, :q, :p, :qty, :up, :tp, :wm)'
-            );
-            $itemId = next_id($pdo, 'quotation_item', 'QuotationItemID');
-            foreach ($lines as $l) {
-                $lineTotal = (float) $l['product']['StandardPrice'] * $l['qty'];
-                $itemStmt->execute([
-                    ':id' => $itemId++, ':q' => $qno,
-                    ':p'  => (int) $l['product']['ProductID'], ':qty' => $l['qty'],
-                    ':up' => $l['product']['StandardPrice'], ':tp' => $lineTotal,
-                    ':wm' => $l['warranty_months'],
-                ]);
-            }
-            $pdo->commit();
+                $itemId = next_id($tx, 'quotation_item', 'QuotationItemID');
+                foreach ($lines as $line) {
+                    $unitPrice = (float) $line['product']['StandardPrice'];
+                    db_insert($tx, 'quotation_item', [
+                        'QuotationItemID' => $itemId++,
+                        'QuotationNo'     => $qno,
+                        'ProductID'       => (int) $line['product']['ProductID'],
+                        'Quantity'        => $line['qty'],
+                        'UnitPrice'       => $unitPrice,
+                        'TotalPrice'      => round($unitPrice * $line['qty'], 2),
+                        'WarrantyMonths'  => $line['warranty_months'],
+                    ]);
+                }
+
+                return ['no' => $qno, 'total' => $total];
+            });
+
             clear_old();
 
-            flash_set('success', 'Quotation #' . $qno . ' submitted — total ' . money($total) . '. Our sales team will contact you within 1 business day.');
+            $flash = 'Quotation #' . $result['no'] . ' submitted — total ' . money($result['total']) . '. '
+                . ($filedUnder === 'internal'
+                    ? 'Filed internally under ' . $accounts['internal']['branch'] . '; the back office prices it from there.'
+                    : 'Our sales team will contact you within 1 business day.');
+            flash_set('success', $flash);
             // AJAX callers get {ok:true, redirect:…} instead of a 302.
             post_success('quotation-request.php');
-        } catch (PDOException $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+        } catch (Throwable $e) {
+            error_log('[SebaBD] Quotation request failed: ' . $e->getMessage());
             $errors[] = 'Could not submit the quotation. ' . (APP_DEBUG ? $e->getMessage() : 'Please try again.');
         }
     }
@@ -170,19 +177,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    from the session, otherwise ?product= fills the first row. Three empty rows
    are always shown for a first-time visitor. */
 $oldQtys       = old_array('quantity');
-$oldWarranty   = old_array('warranty_months');
 $selectedLines = [];
 foreach (old_array('product_id') as $i => $pid) {
     $selectedLines[] = [
-        'id'       => (int) $pid,
-        'qty'      => max(1, (int) ($oldQtys[$i] ?? 1)),
-        'warranty' => max(0, (int) ($oldWarranty[$i] ?? 12)),
+        'id'  => (int) $pid,
+        'qty' => max(1, (int) ($oldQtys[$i] ?? 1)),
     ];
 }
 if (!$selectedLines && $prefillProduct > 0) {
-    $selectedLines = [['id' => $prefillProduct, 'qty' => $prefillQty, 'warranty' => 12]];
+    $selectedLines = [['id' => $prefillProduct, 'qty' => $prefillQty]];
 }
 $rowCount = max(3, count($selectedLines));
+
+// Warranty shown on each line: the selected product's own catalog warranty.
+$warrantyByProduct = [];
+foreach ($catalog as $catalogProduct) {
+    $warrantyByProduct[(int) $catalogProduct['ProductID']] = max(0, (int) $catalogProduct['DefaultWarrantyMonths']);
+}
 
 // A fetch() submit stops here with the error list; a normal submit renders them.
 ajax_errors($errors);
@@ -199,6 +210,16 @@ ajax_errors($errors);
             <h1 class="h4 mb-1">Request a quotation</h1>
             <p class="text-muted small mb-0">Corporate procurement? Tell us what you need and our sales team will respond with pricing and warranty terms.</p>
           </div>
+
+          <?php if ($filedUnder === 'internal'): ?>
+          <div class="alert alert-light border">
+            <i class="fa-solid fa-building-shield me-2"></i>
+            You are signed in as <strong><?= htmlspecialchars($user['FullName']) ?></strong>
+            (<?= htmlspecialchars($user['RoleName']) ?>), so this is an <strong>internal request</strong>.
+            It is booked to <?= htmlspecialchars($accounts['internal']['branch']) ?> and shows in the back office
+            as SebaBD's own procurement rather than in a customer's file.
+          </div>
+          <?php endif; ?>
 
           <div class="ajax-errors" data-ajax-errors>
             <?php if ($errors): ?>
@@ -218,7 +239,13 @@ ajax_errors($errors);
                 <label class="form-label" for="subject">Subject <span class="req">*</span></label>
                 <input class="form-control" id="subject" name="subject" value="<?= old('subject') ?>" placeholder="e.g. 10 office workstations" required>
               </div>
-              <?php if ($client && $branches): ?>
+              <?php if ($filedUnder === 'internal'): ?>
+              <div class="col-md-5">
+                <label class="form-label">Filed under</label>
+                <input class="form-control" value="<?= htmlspecialchars($accounts['internal']['company']) ?>" readonly>
+                <div class="form-text">Internal — <?= htmlspecialchars($accounts['internal']['branch']) ?></div>
+              </div>
+              <?php elseif ($filedUnder === 'client'): ?>
               <div class="col-md-5">
                 <label class="form-label" for="branch_id">Branch <span class="req">*</span></label>
                 <select class="form-select" id="branch_id" name="branch_id" required>
@@ -240,20 +267,29 @@ ajax_errors($errors);
                 <label class="form-label" for="contact_phone">Phone</label>
                 <input class="form-control" id="contact_phone" name="contact_phone" value="<?= old('contact_phone') ?>">
               </div>
+              <div class="col-12">
+                <div class="form-text">
+                  No company account? Your request is logged against our
+                  <strong><?= htmlspecialchars($accounts['walkin']['branch']) ?></strong> counter — you do not need to
+                  pick a branch or register first.
+                </div>
+              </div>
               <?php endif; ?>
             </div>
 
             <h2 class="form-section-title">Products</h2>
+            <p class="text-muted small">Warranty is set by the product's manufacturer and supplier — it is shown for each
+              line and cannot be changed here.</p>
             <div class="line-items" data-max-rows="10" data-currency="<?= htmlspecialchars(currency_symbol()) ?>">
               <div class="line-rows">
                 <?php for ($i = 0; $i < $rowCount; $i++): ?>
                 <?php
                     $pid      = (int) ($selectedLines[$i]['id'] ?? 0);
                     $qty      = (int) ($selectedLines[$i]['qty'] ?? 1);
-                    $warranty = (int) ($selectedLines[$i]['warranty'] ?? 12);
+                    $warranty = $pid > 0 ? ($warrantyByProduct[$pid] ?? null) : null;
                 ?>
                 <div class="line-item-row">
-                  <div class="line-item-grid">
+                  <div class="line-item-grid no-price has-warranty">
                     <div class="line-cell line-cell-product">
                       <label class="form-label">Product</label>
                       <select class="form-select line-product" name="product_id[]">
@@ -284,8 +320,9 @@ ajax_errors($errors);
                       <input class="form-control line-qty" type="number" name="quantity[]" min="1" max="999" value="<?= $qty ?>">
                     </div>
                     <div class="line-cell line-cell-warranty">
-                      <label class="form-label">Warranty (months)</label>
-                      <input class="form-control line-warranty" type="number" name="warranty_months[]" min="0" max="120" value="<?= $warranty ?>">
+                      <label class="form-label">Warranty</label>
+                      <span class="line-warranty-readonly<?= $warranty !== null ? ' is-fixed' : '' ?>" data-warranty-out
+                            title="Product warranty from product.DefaultWarrantyMonths — set by the vendor, not editable here"><?= $warranty !== null ? (int) $warranty . ' mo' : '—' ?></span>
                     </div>
                     <div class="line-cell line-cell-total">
                       <label class="form-label">Line total</label>
@@ -302,7 +339,7 @@ ajax_errors($errors);
 
               <template id="line-item-template">
                 <div class="line-item-row">
-                  <div class="line-item-grid">
+                  <div class="line-item-grid no-price has-warranty">
                     <div class="line-cell line-cell-product">
                       <label class="form-label">Product</label>
                       <select class="form-select line-product" name="product_id[]">
@@ -331,8 +368,9 @@ ajax_errors($errors);
                       <input class="form-control line-qty" type="number" name="quantity[]" min="1" max="999" value="1">
                     </div>
                     <div class="line-cell line-cell-warranty">
-                      <label class="form-label">Warranty (months)</label>
-                      <input class="form-control line-warranty" type="number" name="warranty_months[]" min="0" max="120" value="12">
+                      <label class="form-label">Warranty</label>
+                      <span class="line-warranty-readonly" data-warranty-out
+                            title="Product warranty from product.DefaultWarrantyMonths — set by the vendor, not editable here">—</span>
                     </div>
                     <div class="line-cell line-cell-total">
                       <label class="form-label">Line total</label>
@@ -353,8 +391,10 @@ ajax_errors($errors);
               <div class="d-flex justify-content-between align-items-center">
                 <span class="text-muted">Grand total (<span id="line-count"><?= $rowCount ?></span> lines)</span>
                 <span class="price h5 mb-0" id="grand-total"><?= money(0) ?></span>
-                <?php if (!$client): ?>
-                <small class="text-muted d-block w-100">Signed-in clients get branch-linked quotations and corporate pricing.</small>
+                <?php if ($filedUnder === 'internal'): ?>
+                <small class="text-muted d-block w-100">Internal request — filed under <?= htmlspecialchars($accounts['internal']['branch']) ?>.</small>
+                <?php elseif ($filedUnder === 'walkin'): ?>
+                <small class="text-muted d-block w-100">Filed under <?= htmlspecialchars($accounts['walkin']['branch']) ?>. Signed-in clients get branch-linked quotations and corporate pricing.</small>
                 <?php endif; ?>
               </div>
             </div>

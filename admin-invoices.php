@@ -589,11 +589,16 @@ if ($dbUp) {
         // ---- raised for a retail order
         $orderNo = max(0, (int) ($_GET['from_order'] ?? 0));
         if ($orderNo > 0) {
+            // The branch to bill: the order's own branch when it has one (an
+            // internal order names the SebaBD branch it was placed for), and
+            // otherwise the first branch of the customer's company.
             $order = db_fetch_all(
-                'SELECT o.OrderID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.ShippingAddress,
+                'SELECT o.OrderID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType,
+                        o.BranchID AS OrderBranchID, o.ShippingAddress,
                         u.UserID, u.FullName, u.Email, u.Phone,
                         c.ClientID, c.CompanyName,
-                        (SELECT MIN(b.BranchID) FROM client_branch b WHERE b.ClientID = c.ClientID) AS BranchID,
+                        COALESCE(o.BranchID,
+                                 (SELECT MIN(b.BranchID) FROM client_branch b WHERE b.ClientID = c.ClientID)) AS BranchID,
                         (SELECT i.InvoiceNo FROM invoice i WHERE i.OrderID = o.OrderID) AS InvoiceNo
                  FROM `order` o
                  JOIN `user` u ON u.UserID = o.UserID

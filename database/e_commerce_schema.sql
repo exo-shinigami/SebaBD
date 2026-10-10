@@ -20,8 +20,13 @@ SET time_zone = "+00:00";
 --
 -- Database: `e_commerce`
 --
--- Schema-only export (no sample rows) — the companion to database/e_commerce.sql,
+-- Schema-only export (no demo rows) — the companion to database/e_commerce.sql,
 -- which is the same schema WITH the demo data. Import one or the other, not both.
+--
+-- The only rows here are the two system accounts the application cannot run
+-- without (Walk-in Customers and SebaBD Internal Operations): every quotation
+-- and internal order needs a real client_branch to point at. An existing
+-- database gets the same two accounts from database/migrate-internal-workflow.sql.
 
 CREATE DATABASE IF NOT EXISTS `e_commerce`
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
@@ -114,6 +119,8 @@ CREATE TABLE `order` (
   `OrderDate` datetime DEFAULT current_timestamp(),
   `TotalAmount` decimal(12,2) NOT NULL,
   `OrderStatus` varchar(50) DEFAULT 'Pending',
+  `OrderType` varchar(20) NOT NULL DEFAULT 'Retail',
+  `BranchID` int(11) DEFAULT NULL,
   `ShippingAddress` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -269,6 +276,7 @@ CREATE TABLE `user` (
   `Email` varchar(255) NOT NULL,
   `FullName` varchar(255) NOT NULL,
   `Phone` varchar(50) DEFAULT NULL,
+  `IsActive` tinyint(1) NOT NULL DEFAULT 1,
   `CreatedAt` datetime DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -332,7 +340,8 @@ ALTER TABLE `invoice_item`
 --
 ALTER TABLE `order`
   ADD PRIMARY KEY (`OrderID`),
-  ADD KEY `UserID` (`UserID`);
+  ADD KEY `UserID` (`UserID`),
+  ADD KEY `BranchID` (`BranchID`);
 
 --
 -- Indexes for table `order_item`
@@ -453,7 +462,8 @@ ALTER TABLE `invoice_item`
 -- Constraints for table `order`
 --
 ALTER TABLE `order`
-  ADD CONSTRAINT `order_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `user` (`UserID`);
+  ADD CONSTRAINT `order_ibfk_1` FOREIGN KEY (`UserID`) REFERENCES `user` (`UserID`),
+  ADD CONSTRAINT `order_ibfk_2` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `order_item`
@@ -513,6 +523,42 @@ ALTER TABLE `quotation_item`
 ALTER TABLE `user`
   ADD CONSTRAINT `user_ibfk_1` FOREIGN KEY (`RoleID`) REFERENCES `role` (`RoleID`);
 COMMIT;
+
+--
+-- Required reference rows: the two system accounts
+--
+-- Neither is a login (client.UserID is NULL): a walk-in quotation and an
+-- internal order are both addressed to a branch, and these are the branches
+-- they use. Same rows as database/e_commerce.sql and as the migration.
+--
+INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Email`, `Phone`, `Address`) VALUES
+(1, NULL, 'Walk-in Customers', 'Retail Customer', 'sales@sebabd.com', NULL, 'Dhaka, Bangladesh'),
+(2, NULL, 'SebaBD Internal Operations', 'SebaBD Operations Desk', 'operations@sebabd.com', '+880 1711 100100',
+ 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh');
+
+INSERT INTO `client_branch` (`BranchID`, `ClientID`, `BranchName`, `BranchAddress`, `ContactNo`) VALUES
+(1, 1, 'Dhaka Sales Counter', 'Dhaka, Bangladesh', NULL),
+(2, 2, 'SebaBD Head Office — Internal', 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh', '+880 1711 100100');
+
+--
+-- Triggers
+--
+-- quotation_item.WarrantyMonths is a product fact (the vendor's warranty), never
+-- a typed-in value: it always equals the product's DefaultWarrantyMonths.
+--
+DROP TRIGGER IF EXISTS `quotation_item_warranty_bi`;
+CREATE TRIGGER `quotation_item_warranty_bi` BEFORE INSERT ON `quotation_item`
+FOR EACH ROW
+SET NEW.`WarrantyMonths` = (
+    SELECT `DefaultWarrantyMonths` FROM `product` WHERE `ProductID` = NEW.`ProductID`
+);
+
+DROP TRIGGER IF EXISTS `quotation_item_warranty_bu`;
+CREATE TRIGGER `quotation_item_warranty_bu` BEFORE UPDATE ON `quotation_item`
+FOR EACH ROW
+SET NEW.`WarrantyMonths` = (
+    SELECT `DefaultWarrantyMonths` FROM `product` WHERE `ProductID` = NEW.`ProductID`
+);
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;

@@ -21,7 +21,20 @@ $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 
 $filterStatus = trim((string) ($_GET['status'] ?? ''));
+// '' = every order, 'Retail' = customer orders only, 'Internal' = SebaBD's own.
+$filterChannel = trim((string) ($_GET['channel'] ?? ''));
 $search       = trim((string) ($_GET['q'] ?? ''));
+if (!in_array($filterChannel, [ORDER_TYPE_RETAIL, ORDER_TYPE_INTERNAL], true)) {
+    $filterChannel = '';
+}
+
+/** A badge naming the order's channel, for the list and the order page. */
+function order_channel_badge(string $orderType): string
+{
+    return $orderType === ORDER_TYPE_INTERNAL
+        ? '<span class="report-badge report-badge-info"><i class="fa-solid fa-building-shield me-1"></i>Internal</span>'
+        : '<span class="report-badge report-badge-plain">Retail</span>';
+}
 
 // order_statuses() lives in helpers.php: the customer's order page uses the
 // same list, and a status means the same thing on both sides of the counter.
@@ -91,13 +104,17 @@ $orderPage = null;
 if ($dbUp) {
     if ($action === 'view') {
         $found = db_fetch_all(
-            'SELECT o.OrderID, o.UserID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.ShippingAddress,
+            'SELECT o.OrderID, o.UserID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType,
+                    o.BranchID, o.ShippingAddress,
                     u.FullName, u.Username, u.Email, u.Phone,
                     c.ClientID, c.CompanyName,
+                    b.BranchName, bc.CompanyName AS BranchCompany,
                     (SELECT COUNT(*) FROM order_item oi WHERE oi.OrderID = o.OrderID) AS Items
              FROM `order` o
              JOIN `user` u ON u.UserID = o.UserID
              LEFT JOIN client c ON c.UserID = u.UserID
+             LEFT JOIN client_branch b ON b.BranchID = o.BranchID
+             LEFT JOIN client bc ON bc.ClientID = b.ClientID
              WHERE o.OrderID = :id',
             [':id' => $id]
         );
@@ -132,6 +149,10 @@ if ($dbUp) {
         $where[]           = 'o.OrderStatus = :status';
         $params[':status'] = $filterStatus;
     }
+    if ($filterChannel !== '') {
+        $where[]            = 'o.OrderType = :channel';
+        $params[':channel'] = $filterChannel;
+    }
     if ($search !== '') {
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
         $where[] = '(u.FullName LIKE :q1 OR u.Username LIKE :q2 OR o.ShippingAddress LIKE :q3 OR c.CompanyName LIKE :q4)';
@@ -149,7 +170,7 @@ if ($dbUp) {
     $orderPage = paginate((int) ($countRow[0]['n'] ?? 0), 20);
 
     $rows = db_fetch_all(
-        'SELECT o.OrderID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.ShippingAddress,
+        'SELECT o.OrderID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType, o.BranchID, o.ShippingAddress,
                 u.UserID, u.FullName, u.Username, c.ClientID, c.CompanyName,
                 (SELECT COUNT(*) FROM order_item oi WHERE oi.OrderID = o.OrderID) AS Items,
                 (SELECT i.InvoiceNo FROM invoice i WHERE i.OrderID = o.OrderID) AS InvoiceNo'
@@ -165,6 +186,8 @@ if ($dbUp) {
                 SUM(CASE WHEN OrderStatus = 'Pending' THEN 1 ELSE 0 END) AS Pending,
                 SUM(CASE WHEN OrderStatus = 'Processing' THEN 1 ELSE 0 END) AS Processing,
                 SUM(CASE WHEN OrderStatus = 'Completed' THEN 1 ELSE 0 END) AS Completed,
+                SUM(CASE WHEN OrderType = 'Internal' THEN 1 ELSE 0 END) AS InternalOrders,
+                COALESCE(SUM(CASE WHEN OrderType = 'Internal' THEN TotalAmount ELSE 0 END), 0) AS InternalValue,
                 SUM(CASE WHEN OrderStatus NOT IN ('Cancelled') AND NOT EXISTS
                      (SELECT 1 FROM invoice i WHERE i.OrderID = `order`.OrderID) THEN 1 ELSE 0 END) AS Uninvoiced
          FROM `order`"
@@ -174,7 +197,7 @@ if ($dbUp) {
 
 ajax_errors($errors);
 
-$filterQs = http_build_query(array_filter(['status' => $filterStatus, 'q' => $search]));
+$filterQs = http_build_query(array_filter(['status' => $filterStatus, 'channel' => $filterChannel !== '' ? $filterChannel : null, 'q' => $search]));
 $listUrl  = 'admin-orders.php' . ($filterQs !== '' ? '?' . $filterQs : '');
 
 echo partial_render('partials/header.php', ['page_title' => 'Orders', 'active_nav' => 'admin']);
@@ -206,6 +229,8 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
     <?= report_kpi('To action', number_format((int) ($totals['Pending'] ?? 0)), (int) ($totals['Processing'] ?? 0) . ' already being processed', 'fa-hourglass-half') ?>
     <?= report_kpi('Completed', number_format((int) ($totals['Completed'] ?? 0)), 'Delivered and closed', 'fa-circle-check') ?>
     <?= report_kpi('Not yet invoiced', number_format((int) ($totals['Uninvoiced'] ?? 0)), 'Orders waiting for an invoice', 'fa-file-invoice-dollar') ?>
+    <?= report_kpi('Internal', number_format((int) ($totals['InternalOrders'] ?? 0)),
+        'SebaBD\'s own orders · ' . money((float) ($totals['InternalValue'] ?? 0)), 'fa-building-shield') ?>
   </div>
 
   <form class="report-filter mb-3" method="get" action="admin-orders.php">
@@ -221,6 +246,14 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
           <?php foreach (order_statuses() as $status): ?>
           <option value="<?= htmlspecialchars($status) ?>" <?= $filterStatus === $status ? 'selected' : '' ?>><?= htmlspecialchars($status) ?></option>
           <?php endforeach; ?>
+        </select>
+      </label>
+      <label class="report-filter-field">
+        <span class="form-label">Channel</span>
+        <select class="form-select form-select-sm" name="channel">
+          <option value="">Every channel</option>
+          <option value="Retail" <?= $filterChannel === ORDER_TYPE_RETAIL ? 'selected' : '' ?>>Customer orders</option>
+          <option value="Internal" <?= $filterChannel === ORDER_TYPE_INTERNAL ? 'selected' : '' ?>>Internal (SebaBD's own)</option>
         </select>
       </label>
     </div>
@@ -257,6 +290,7 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
                   . (int) $row['OrderID'] . '</a>',
               format_date($row['OrderDate'], 'd M Y H:i'),
               '<span class="fw-semibold">' . htmlspecialchars($row['FullName']) . '</span>'
+                  . order_channel_badge((string) $row['OrderType'])
                   . '<small class="d-block text-muted">' . htmlspecialchars($row['Username'])
                   . ($row['CompanyName'] !== null ? ' · ' . htmlspecialchars($row['CompanyName']) : '') . '</small>',
               '<span class="small">' . htmlspecialchars((string) ($row['ShippingAddress'] ?? '—')) . '</span>',
@@ -278,8 +312,8 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
           ? '<a class="btn btn-outline-secondary btn-sm" href="admin-orders.php">Clear filters</a>'
           : '<a class="btn btn-accent btn-sm" href="index.php?all=1#featured-products"><i class="fa-solid fa-store me-1"></i>Open the storefront</a>',
       'summary'      => pagination_summary($orderPage, 'order'),
-      'pagination'   => pagination_links($orderPage, $listUrl),
-      'note'         => 'Order lines snapshot the price at order time (<code>UnitPrice</code>), so a later catalog change never rewrites an order.',
+      'pagination'   => pagination_links($orderPage, $listUrl),          'note'         => 'Order lines snapshot the price at order time (<code>UnitPrice</code>), so a later catalog change never rewrites an order. '
+                            . '<code>order.OrderType</code> separates customer orders from SebaBD\'s own internal orders, which are booked to the internal branch in <code>order.BranchID</code>.',
   ]) ?>
 
   <?php else: ?>
@@ -292,10 +326,22 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
             <p class="report-panel-sub">
               Placed <?= format_date($order['OrderDate'], 'd M Y H:i') ?>
               by <?= htmlspecialchars($order['FullName']) ?> (<?= htmlspecialchars($order['Username']) ?>)
+              <?= order_channel_badge((string) $order['OrderType']) ?>
             </p>
           </div>
           <?= status_badge((string) $order['OrderStatus']) ?>
         </div>
+
+        <?php if (($order['OrderType'] ?? ORDER_TYPE_RETAIL) === ORDER_TYPE_INTERNAL): ?>
+        <div class="alert alert-light border">
+          <i class="fa-solid fa-building-shield me-2"></i>
+          This is an <strong>internal order</strong> — SebaBD buying for itself, not a customer sale.
+          <?php if (!empty($order['BranchName'])): ?>
+          It is booked to <?= htmlspecialchars((string) $order['BranchCompany']) ?> —
+          <?= htmlspecialchars((string) $order['BranchName']) ?>, so its invoice follows the same branch.
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
 
         <div class="table-responsive">
           <table class="table table-sm report-th align-middle mb-0">

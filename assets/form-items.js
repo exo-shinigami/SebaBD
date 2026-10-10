@@ -4,7 +4,7 @@
  *   <div class="line-items" data-max-rows="10">
  *     <div class="line-item-row"> select.line-product (options carry
  *       data-price / data-warranty), input.line-qty, [input.line-price],
- *       [input.line-warranty], <span class="line-total">, button.remove-row
+ *       [span[data-warranty-out]], <span class="line-total">, button.remove-row
  *     </div> ...
  *     <template id="line-item-template"> …one .line-item-row… </template>
  *     <button class="add-row">
@@ -14,6 +14,11 @@
  * A row may carry its own `.line-price` input (staff quotations pick their own
  * price). When one is present it wins over the option's data-price, which is
  * what the customer-facing forms rely on.
+ *
+ * The warranty cell is read-only: it displays the selected product's own
+ * data-warranty (product.DefaultWarrantyMonths) and is never submitted. The
+ * server reads the value from the catalog on save, so the display is only a
+ * convenience for whoever is filling the form in.
  */
 (function () {
     'use strict';
@@ -58,12 +63,26 @@
         if (countOut) countOut.textContent = container.querySelectorAll('.line-item-row').length;
     }
 
+    // The read-only warranty cell mirrors the selected product's catalog
+    // warranty. Warranty months are a product fact, so nothing here is an
+    // input and nothing here is submitted — the server reads the catalog again.
+    function showWarranty(row) {
+        const out = row.querySelector('[data-warranty-out]');
+        if (!out) return;
+
+        const opt    = row.querySelector('.line-product').selectedOptions[0];
+        const months = opt && opt.dataset.warranty !== undefined ? opt.dataset.warranty : '';
+        const fixed  = months !== '' && opt.value !== '';
+
+        out.textContent = fixed ? months + ' mo' : '—';
+        out.classList.toggle('is-fixed', fixed);
+    }
+
     function wireRow(container, row) {
         const sel = row.querySelector('.line-product');
         sel.addEventListener('change', () => {
             const opt = sel.selectedOptions[0];
-            const w = row.querySelector('.line-warranty');
-            if (w && opt && opt.dataset.warranty) w.value = opt.dataset.warranty;
+            showWarranty(row);
             // Keep an editable price in step with the product that was picked,
             // but never overwrite a price the user typed for the same product.
             const p = row.querySelector('.line-price');
@@ -76,8 +95,7 @@
         row.querySelector('.line-qty').addEventListener('input', () => refresh(container));
         const p = row.querySelector('.line-price');
         if (p) p.addEventListener('input', () => refresh(container));
-        const w = row.querySelector('.line-warranty');
-        if (w) w.addEventListener('input', () => refresh(container));
+        showWarranty(row);
         row.querySelector('.remove-row').addEventListener('click', () => {
             const rows = container.querySelectorAll('.line-item-row');
             if (rows.length > 1) {
@@ -87,6 +105,7 @@
                 // Keep at least one row; just reset it.
                 sel.selectedIndex = 0;
                 row.querySelector('.line-qty').value = 1;
+                showWarranty(row);
                 refresh(container);
             }
         });

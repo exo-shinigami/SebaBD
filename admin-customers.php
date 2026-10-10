@@ -429,7 +429,9 @@ echo admin_lead('Customers &amp; branches', 'A company owns one or more branch o
       ]),
       'summary'      => pagination_summary($clientPage, 'company'),
       'pagination'   => pagination_links($clientPage, $listUrl),
-      'note'         => 'Walk-in quotations create a shared <em>Walk-in Customers</em> company automatically, which is why it has no linked login.',
+      'note'         => 'Two companies here never have a login: <em>Walk-in Customers</em> and <em>SebaBD Internal Operations</em>. '
+                      . 'They are the house accounts every quotation and internal order is filed under, so they cannot be deleted while '
+                      . 'documents point at their branches.',
   ]) ?>
 
   <?php elseif ($action === 'branch'):
