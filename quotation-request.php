@@ -70,6 +70,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'No branch found for your company — please contact support.';
     }
 
+    // Individual customers file under their own account, with no branch. They
+    // are not allowed to ask for the quotation to be addressed to the SebaBD
+    // House account, so a posted branch that resolves to a house branch is
+    // treated as a validation error for them (not silently converted to NULL).
+    $cfg = require __DIR__ . '/config.php';
+    if ($filedUnder === 'individual') {
+        $accountTypes = db_fetch_all(
+            'SELECT c.AccountType FROM client_branch b JOIN client c ON c.ClientID = b.ClientID'
+            . ' WHERE b.BranchID = :id LIMIT 1',
+            [':id' => $branchId]
+        );
+        $branchId = 0;
+        if (!empty($accountTypes) && ($accountTypes[0]['AccountType'] ?? '') === 'house') {
+            if (!empty($cfg['allow_house_quotation_to_individual'])) {
+                $branchId = (int) ($_POST['branch_id'] ?? 0);
+            } else {
+                $errors[] = 'Your account is a personal customer account — quotations are prepared for you directly, not filed under a SebaBD house branch. Please remove the branch from this request.';
+            }
+        }
+    }
+
     // Warranty is a product fact (product.DefaultWarrantyMonths), so the line's
     // warranty is read from the catalog here — a posted warranty_months value,
     // if one is sent at all, is ignored on purpose.
@@ -236,6 +257,7 @@ ajax_errors($errors);
             <i class="fa-solid fa-user me-2"></i>
             You are signed in as <strong><?= htmlspecialchars((string) ($user['FullName'] ?? '')) ?></strong>,
             so this quotation is prepared for <strong>your own account</strong> — no branch, no company record.
+            A SebaBD house branch is not available for this request.
           </div>
           <?php endif; ?>
 

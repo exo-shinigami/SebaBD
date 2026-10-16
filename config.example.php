@@ -28,12 +28,20 @@ return [
      * system_branch_id() in helpers.php, and
      * database/migrate-internal-workflow.sql which seeds them).
      *
-     *   walkin    a visitor or individual customer without a company record
-     *             — used for quotations without a branch, and the sales
-     *             counter is the filing address
-     *   internal  LEGACY — staff no longer order from the storefront, so
-     *             nothing files here any more; the rows stay because historical
-     *             Internal orders and quotations point at them
+     *   walkin    a visitor without a company record — quotations with no
+     *             branch, filed at the sales counter
+     *   internal  LEGACY — staff do not order from the storefront any more,
+     *             so nothing files here now; the row stays because historical
+     *             Internal orders and quotations point at it
+     *
+     * Customer contact accounts (the individual logins created through
+     * register.php and the company logins created through b2b-registration.php)
+     * are NOT house accounts. They each own their own `client` row (with
+     * AccountType 'individual' or 'b2b') and their own quotation/Invoice
+     * records via quotation.ClientID / invoice.ClientID. Individuals have no
+     * branch, so an individual's quotation is filed with BranchID NULL — they
+     * are not quoted under Walk-in Customers, and individuals are not permitted
+     * to request a quotation addressed to the SebaBD House account.
      */
     'system_accounts' => [
         'walkin' => [
@@ -53,4 +61,22 @@ return [
             'address' => 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh',
         ],
     ],
+
+    /**
+     * Email verification is off by default. The site does not send the user
+     * anything. Turn it on only if the site is actually configured to send
+     * mail (SMTP, sendmail, or whatever the platform provides) and the
+     * verification handler in register.php has been wired up.
+     */
+    'email_verification_enabled' => false,
+
+    /**
+     * Individual customers (register.php) are not allowed to file a quotation
+     * addressed to the SebaBD House account. Their request is always prepared
+     * for their own account (quotation.ClientID = their own client row,
+     * BranchID = NULL). The setting is on by default and should stay on:
+     * a SebaBD house quotation is the company's own document, not a customer
+     * document.
+     */
+    'allow_house_quotation_to_individual' => false,
 ];
