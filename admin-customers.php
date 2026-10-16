@@ -179,21 +179,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'The phone number looks invalid.';
         }
         if (!$errors && $userId > 0) {
-            // The 1:1 link: the login must be a customer account, and must not
-            // already point at a different company.
+            // The 1:1 link: the login must be a customer (no staff role), and
+            // must not already point at a different company.
             $login = db_fetch_all(
-                'SELECT u.UserID, u.FullName, r.RoleName, c.ClientID
+                'SELECT u.UserID, u.FullName, u.RoleID, c.ClientID
                  FROM `user` u
-                 JOIN `role` r ON r.RoleID = u.RoleID
                  LEFT JOIN client c ON c.UserID = u.UserID
                  WHERE u.UserID = :id',
                 [':id' => $userId]
             );
             if (!$login) {
                 $errors[] = 'That login account does not exist.';
-            } elseif (!in_array($login[0]['RoleName'], client_roles(), true)) {
-                $errors[] = 'Only customer accounts (Client Account / B2B Client Account) can be linked to a company. '
-                          . $login[0]['FullName'] . ' holds the ' . $login[0]['RoleName'] . ' role.';
+            } elseif ($login[0]['RoleID'] !== null) {
+                $roleRows = db_fetch_all('SELECT RoleName FROM `role` WHERE RoleID = :id', [':id' => $login[0]['RoleID']]);
+                $errors[] = 'Only customer logins (no staff role) can be linked to a company. '
+                          . $login[0]['FullName'] . ' holds the ' . (string) ($roleRows[0]['RoleName'] ?? 'staff') . ' role.';
             } elseif ((int) ($login[0]['ClientID'] ?? 0) > 0 && (int) $login[0]['ClientID'] !== $editId) {
                 $errors[] = 'That login is already linked to another company (#'
                           . (int) $login[0]['ClientID'] . '). A login can belong to one company only.';

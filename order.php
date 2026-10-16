@@ -2,6 +2,10 @@
 require_once __DIR__ . '/helpers.php';
 
 $user = require_login('order.php');
+
+// Quick order is a customer action — signed-in staff are refused, exactly as
+// they are on the cart and the quotation form.
+refuse_staff_order($user);
 $errors = [];
 
 // ?product=<id>&qty=<n> — product cards and product.php link here so the

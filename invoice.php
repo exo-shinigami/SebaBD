@@ -19,15 +19,15 @@ $user = require_login('invoice.php');
 $no   = max(0, (int) ($_GET['no'] ?? 0));
 
 $rows = db_fetch_all(
-    'SELECT i.InvoiceNo, i.InvoiceDate, i.BranchID, i.OrderID, i.QuotationNo,
+    'SELECT i.InvoiceNo, i.InvoiceDate, i.BranchID, i.ClientID, i.OrderID, i.QuotationNo,
             i.TotalAmount, i.PaymentStatus, i.RemainingBalance, i.AmountInWords,
             b.BranchName, b.BranchAddress, b.ContactNo,
-            c.ClientID, c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address,
-            o.UserID, o.ShippingAddress,
+            c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address,
+            o.UserID AS OrderUserID, o.ShippingAddress,
             u.FullName AS BuyerName
      FROM invoice i
-     JOIN client_branch b ON b.BranchID = i.BranchID
-     JOIN client c ON c.ClientID = b.ClientID
+     LEFT JOIN client_branch b ON b.BranchID = i.BranchID
+     LEFT JOIN client c ON c.ClientID = i.ClientID
      LEFT JOIN `order` o ON o.OrderID = i.OrderID
      LEFT JOIN `user` u ON u.UserID = o.UserID
      WHERE i.InvoiceNo = :id',
@@ -39,17 +39,19 @@ if ($invoice === null) {
     deny_page(404, 'Invoice not found', 'Invoice #' . $no . ' does not exist.', 'index.php', 'Back to the storefront');
 }
 
-/* -------------------------------------------------------------- access rule */
+/* -------------------------------------------------------------- access rule
+ * Staff may open any invoice. A customer may open one billed to their own
+ * company — invoice.ClientID is the owner (falling back to the order's buyer
+ * through invoice.OrderID for legacy rows raised before the column existed).
+ * The same rule the dashboard uses when it lists "my invoices" — so a
+ * customer cannot read another company's paperwork by guessing a number.
+ */
 $mayView = is_staff_user($user);
-if (!$mayView && is_client_user($user)) {
-    $mine = db_fetch_all(
-        'SELECT b.BranchID
-         FROM client c
-         JOIN client_branch b ON b.ClientID = c.ClientID
-         WHERE c.UserID = :uid',
-        [':uid' => (int) $user['UserID']]
-    );
-    $mayView = in_array((int) $invoice['BranchID'], array_map('intval', array_column($mine, 'BranchID')), true);
+if (!$mayView) {
+    $mine      = customer_client($user);
+    $ownClient = $mine !== null && (int) $invoice['ClientID'] === (int) $mine['ClientID'];
+    $ownOrder  = (int) ($invoice['OrderUserID'] ?? 0) === (int) $user['UserID'];
+    $mayView   = $ownClient || $ownOrder;
 }
 if (!$mayView) {
     deny_page(403, 'Not your document',

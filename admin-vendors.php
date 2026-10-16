@@ -149,7 +149,7 @@ ajax_errors($errors);
 
 $pageTitle = $action === 'list' ? 'Suppliers' : ($action === 'edit' ? 'Edit supplier' : 'New supplier');
 echo partial_render('partials/header.php', ['page_title' => $pageTitle, 'active_nav' => 'admin']);
-echo admin_lead('Vendors', 'The suppliers behind the catalog. A vendor supplies many products and receives many purchase orders; every product has exactly one supplier.');
+echo admin_lead('Vendors', 'Your own record of the suppliers behind the catalog. A supplier never signs in or acts on your behalf — vendors exist here only so SebaBD can track product sourcing and its own purchasing history.');
 ?>
 
 <div class="container pb-5">

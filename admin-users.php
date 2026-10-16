@@ -2,10 +2,12 @@
 /**
  * SebaBD — Users & roles (back office, administrator only).
  *
- * Every login carries exactly one role (#1), and some logins are linked to a
- * company (#2 — the optional 1:1). This page is where staff accounts are
- * created, because the public registration forms deliberately only ever grant
- * customer roles.
+ * Every login is an account; only SebaBD *staff* logins carry a role (#1).
+ * A customer login — an individual from the storefront or a B2B contact —
+ * has `RoleID = NULL` and is created with the "No staff role" option below.
+ * Some customer logins are linked to a client record (#2, the optional 1:1).
+ * This page is where staff accounts are created, because the public
+ * registration forms never grant a role.
  *
  *   admin-users.php                       every account, the role it holds, active or not
  *   admin-users.php?action=new            create a staff or customer login
@@ -181,16 +183,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // The role must exist, and an administrator must not lock themselves out.
+        // The role must exist (0 = customer login, no staff role), and an
+        // administrator must not lock themselves out.
         $role = null;
         if (!$errors) {
-            $found = db_fetch_all('SELECT RoleID, RoleName FROM `role` WHERE RoleID = :id', [':id' => $roleId]);
-            $role  = $found[0] ?? null;
-            if ($role === null) {
-                $errors[] = 'Choose one of the listed roles.';
-            } elseif ($editId === (int) $user['UserID'] && $role['RoleName'] !== 'Admin') {
+            if ($roleId === 0) {
+                $role = ['RoleID' => 0, 'RoleName' => '']; // customer: RoleID NULL
+            } else {
+                $found = db_fetch_all('SELECT RoleID, RoleName FROM `role` WHERE RoleID = :id', [':id' => $roleId]);
+                $role  = $found[0] ?? null;
+                if ($role === null) {
+                    $errors[] = 'Choose one of the listed roles.';
+                }
+            }
+            if ($role !== null && $editId === (int) $user['UserID'] && $role['RoleName'] !== 'Admin') {
                 $errors[] = 'You cannot change your own role away from Admin — sign in as another administrator first.';
-            } elseif ($editId > 0 && $role['RoleName'] !== 'Admin' && $activationSupported) {
+            } elseif ($role !== null && $role['RoleName'] !== 'Admin' && $role['RoleID'] !== 0 && $editId > 0 && $activationSupported) {
                 // Demoting the last administrator would lock the back office out
                 // just as surely as deactivating it.
                 $wasAdmin = db_fetch_all(
@@ -224,8 +232,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (!$errors) {
+            // RoleID NULL marks a customer login; a staff role is stored by id.
             $data = [
-                'RoleID'   => (int) $role['RoleID'],
+                'RoleID'   => (int) $role['RoleID'] > 0 ? (int) $role['RoleID'] : null,
                 'Username' => $username,
                 'Email'    => $email,
                 'FullName' => $fullName,
@@ -237,11 +246,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         deny_page(404, 'Account not found', 'Account #' . $editId . ' does not exist.');
                     }
                     db_update($pdo, 'user', $data, ['UserID' => $editId]);
-                    flash_set('success', 'Account “' . $username . '” updated — role ' . $role['RoleName'] . '.');
+                    flash_set('success', 'Account “' . $username . '” updated — '
+                        . ((int) $role['RoleID'] > 0 ? 'role ' . $role['RoleName'] : 'customer login, no staff role') . '.');
                 } else {
                     $data['PasswordHash'] = password_hash($password, PASSWORD_DEFAULT);
                     $newId = db_transaction($pdo, fn(PDO $tx) => db_insert($tx, 'user', $data, 'UserID'));
-                    flash_set('success', 'Account “' . $username . '” created as #' . $newId . ' (' . $role['RoleName'] . ').');
+                    flash_set('success', 'Account “' . $username . '” created as #' . $newId
+                        . ((int) $role['RoleID'] > 0 ? ' (' . $role['RoleName'] . ').' : ' (customer, no staff role).'));
                     post_success('admin-users.php?action=edit&id=' . $newId);
                 }
                 post_success('admin-users.php?action=edit&id=' . $editId);
@@ -278,7 +289,7 @@ if ($dbUp) {
         $found = db_fetch_all(
             'SELECT u.UserID, u.RoleID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt,
                     ' . $activeSelect . ', r.RoleName
-             FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+             FROM `user` u LEFT JOIN `role` r ON r.RoleID = u.RoleID
              WHERE u.UserID = :id',
             [':id' => $id]
         );
@@ -324,7 +335,7 @@ if ($dbUp) {
                 (SELECT COUNT(*) FROM `order` o WHERE o.UserID = u.UserID) AS Orders,
                 (SELECT COALESCE(SUM(o.TotalAmount), 0) FROM `order` o WHERE o.UserID = u.UserID) AS Spent
          FROM `user` u
-         JOIN `role` r ON r.RoleID = u.RoleID
+         LEFT JOIN `role` r ON r.RoleID = u.RoleID
          LEFT JOIN client c ON c.UserID = u.UserID' . $whereSql . '
          ORDER BY ' . ($activationSupported ? 'u.IsActive' : '1') . ' DESC, u.RoleID, u.FullName
          LIMIT ' . $userPage['perPage'] . ' OFFSET ' . $userPage['offset'],
@@ -335,8 +346,7 @@ if ($dbUp) {
         "SELECT (SELECT COUNT(*) FROM `user`) AS Accounts,
                 (SELECT COUNT(*) FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
                   WHERE r.RoleName IN ('Admin', 'Sales Manager', 'Inventory Manager')) AS Staff,
-                (SELECT COUNT(*) FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
-                  WHERE r.RoleName IN ('Client Account', 'B2B Client Account')) AS Customers,
+                (SELECT COUNT(*) FROM `user` WHERE RoleID IS NULL) AS Customers,
                 (SELECT COUNT(*) FROM client WHERE UserID IS NOT NULL) AS Linked,
                 (SELECT COUNT(*) FROM `user` u WHERE " . ($activationSupported ? 'u.IsActive = 0' : '1 = 0') . ") AS Disabled"
     );
@@ -349,7 +359,7 @@ $filterQs = http_build_query(array_filter(['role' => $filterRole ?: null, 'q' =>
 $listUrl  = 'admin-users.php' . ($filterQs !== '' ? '?' . $filterQs : '');
 
 echo partial_render('partials/header.php', ['page_title' => 'Users & roles', 'active_nav' => 'admin']);
-echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a customer login may additionally be linked to one company. Staff roles are granted here and nowhere else.');
+echo admin_lead('Users &amp; roles', 'Roles belong to SebaBD staff only — a customer login carries none. A customer login may additionally be linked to one client record. Staff roles are granted here and nowhere else.');
 ?>
 
 <div class="container pb-5">
@@ -381,7 +391,7 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
     <?= report_kpi('Accounts', number_format((int) ($totals['Accounts'] ?? 0)), 'Every login in the system', 'fa-users') ?>
     <?= report_kpi('Staff', number_format((int) ($totals['Staff'] ?? 0)), 'Admin, sales and inventory', 'fa-user-shield') ?>
     <?= report_kpi('Customers', number_format((int) ($totals['Customers'] ?? 0)), 'Retail and corporate logins', 'fa-user-tie') ?>
-    <?= report_kpi('Linked to a company', number_format((int) ($totals['Linked'] ?? 0)), 'The optional 1:1 in the schema', 'fa-link') ?>
+    <?= report_kpi('Linked to a customer record', number_format((int) ($totals['Linked'] ?? 0)), 'The optional 1:1 in the schema', 'fa-link') ?>
     <?= report_kpi('Deactivated', number_format((int) ($totals['Disabled'] ?? 0)), 'Sign-in closed, history kept', 'fa-user-slash') ?>
   </div>
 
@@ -433,7 +443,9 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
                   . ($isSelf ? ' · <span class="text-success">you</span>' : '') . '</small>',
               htmlspecialchars($row['Email'])
                   . ($row['Phone'] ? '<small class="d-block text-muted">' . htmlspecialchars($row['Phone']) . '</small>' : ''),
-              status_badge((string) $row['RoleName'], htmlspecialchars((string) $row['RoleName'])),
+              $row['RoleID'] !== null
+                  ? status_badge((string) $row['RoleName'], htmlspecialchars((string) $row['RoleName']))
+                  : '<span class="report-badge report-badge-plain">Customer — no role</span>',
               $active
                   ? '<span class="report-badge report-badge-ok">Active</span>'
                   : '<span class="report-badge report-badge-danger">Deactivated</span>',
@@ -486,10 +498,12 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
       'actions'      => admin_actions([['href' => 'admin-users.php?action=new', 'label' => 'New account', 'icon' => 'fa-plus']]),
       'summary'      => pagination_summary($userPage, 'account'),
       'pagination'   => pagination_links($userPage, $listUrl),
-      'note'         => '<code>user.RoleID</code> points at exactly one <code>role</code> row, and <code>client.UserID</code> is a '
-                      . '<code>UNIQUE</code> key — which is how “one login, at most one company” is enforced by the database rather '
-                      . 'than by this page. Deactivating sets <code>user.IsActive = 0</code>: the account keeps every order and '
-                      . 'document it created, but the person cannot sign in.',
+      'note'         => '<code>user.RoleID</code> is <code>NULL</code> for a customer login — roles belong to SebaBD staff only. '
+                      . 'A customer account can additionally be linked to one client record ('
+                      . '<code>client.UserID</code> is a <code>UNIQUE</code> key), which is how "one login, at most one '
+                      . 'company" is enforced by the database rather than by this page. Deactivating sets '
+                      . '<code>user.IsActive = 0</code>: the account keeps every order and document it created, '
+                      . 'but the person cannot sign in.',
   ]) ?>
 
   <?php else:
@@ -499,13 +513,13 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
           'Username' => (string) $edit['Username'],
           'Email'    => (string) $edit['Email'],
           'Phone'    => (string) ($edit['Phone'] ?? ''),
-          'RoleID'   => (int) $edit['RoleID'],
+          'RoleID'   => (int) ($edit['RoleID'] ?? 0),
       ] : [
           'FullName' => post_str('full_name'),
           'Username' => post_str('username'),
           'Email'    => post_str('email'),
           'Phone'    => post_str('phone'),
-          'RoleID'   => post_int('role_id', ROLE_CLIENT_ACCOUNT),
+          'RoleID'   => post_int('role_id', 0),
       ];
       $shownId = $isEdit ? (int) $edit['UserID'] : $nextFreeId;
       $isSelf  = $isEdit && $shownId === (int) $user['UserID'];
@@ -566,6 +580,9 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
             <div class="col-12">
               <label class="form-label" for="role_id">Role <span class="req">*</span></label>
               <select class="form-select" id="role_id" name="role_id" required <?= $isSelf ? 'disabled' : '' ?>>
+                <option value="0" <?= $values['RoleID'] === 0 ? 'selected' : '' ?>>
+                  No staff role — customer login (individual or B2B)
+                </option>
                 <?php foreach ($roles as $role): ?>
                 <option value="<?= (int) $role['RoleID'] ?>" <?= $values['RoleID'] === (int) $role['RoleID'] ? 'selected' : '' ?>>
                   <?= htmlspecialchars($role['RoleName']) ?> — <?= (int) $role['Accounts'] ?> account(s)
@@ -576,8 +593,9 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
               <input type="hidden" name="role_id" value="<?= (int) $values['RoleID'] ?>">
               <?php endif; ?>
               <small class="text-muted">
-                Staff roles (Admin, Sales Manager, Inventory Manager) can open the back office and the reports;
-                customer roles see the storefront and their own documents only.
+                Only SebaBD staff hold a role (Admin, Sales Manager, Inventory Manager) and can open the back
+                office and the reports; a customer login has <code>RoleID = NULL</code> and sees the storefront
+                and its own documents only.
               </small>
             </div>
           </div>
@@ -639,7 +657,9 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
           <h2 class="report-panel-title">What depends on this account</h2>
           <p class="report-panel-sub">What would be affected if it were removed.</p>
         </div>
-        <?= admin_detail_row('Role', status_badge((string) $edit['RoleName'], htmlspecialchars((string) $edit['RoleName']))) ?>
+        <?= admin_detail_row('Role', $edit['RoleID'] !== null
+            ? status_badge((string) $edit['RoleName'], htmlspecialchars((string) $edit['RoleName']))
+            : '<span class="report-badge report-badge-plain">Customer — no staff role</span>') ?>
         <?= admin_detail_row('Orders placed', $orderCount > 0
             ? '<a href="admin-orders.php?q=' . urlencode((string) $edit['Username']) . '">' . $orderCount . ' order(s)</a>'
             : 'none') ?>
@@ -647,7 +667,7 @@ echo admin_lead('Users &amp; roles', 'Every login holds exactly one role, and a 
             ? '<a href="admin-customers.php?action=edit&id=' . $linkedTo . '">Company #' . $linkedTo . '</a>'
             : 'none') ?>
         <?= admin_detail_row('Created', format_date($edit['CreatedAt'])) ?>
-        <?= admin_detail_row('Can open', implode(' · ', array_map('htmlspecialchars', in_array($edit['RoleName'], staff_roles(), true)
+        <?= admin_detail_row('Can open', implode(' · ', array_map('htmlspecialchars', in_array((string) ($edit['RoleName'] ?? ''), staff_roles(), true)
             ? ['Storefront', 'Dashboard', 'Back office', 'Reports']
             : ['Storefront', 'Dashboard', 'Own documents']))) ?>
         <?= admin_detail_row('Account state', $editIsActive

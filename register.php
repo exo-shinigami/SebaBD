@@ -12,7 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone    = trim($_POST['phone'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm  = $_POST['password_confirm'] ?? '';
-    $role     = $_POST['role'] ?? '4';
 
     keep_old(array_filter([
         'full_name' => $fullName, 'username' => $username,
@@ -39,8 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Passwords do not match.';
     }
 
-    // Public retail registration is the only self-service path for this role.
-    $roleId = ROLE_CLIENT_ACCOUNT;
+    // Staff accounts are created by the administrator in the back office; a
+    // public registration creates a customer. The customer identity itself —
+    // the individual's client record — is created together with the login in
+    // the transaction below. The login holds no role (user.RoleID is NULL:
+    // only SebaBD staff have roles).
 
     $pdo = db();
     if (!$pdo) {
@@ -65,16 +67,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $userId = next_id($pdo, 'user', 'UserID');
                 $stmt = $pdo->prepare(
                     'INSERT INTO `user` (UserID, RoleID, Username, PasswordHash, Email, FullName, Phone)
-                     VALUES (:id, :role, :u, :p, :e, :f, :ph)'
+                     VALUES (:id, NULL, :u, :p, :e, :f, :ph)'
                 );
                 $stmt->execute([
                     ':id'   => $userId,
-                    ':role' => $roleId,
                     ':u'    => $username,
                     ':p'    => password_hash($password, PASSWORD_DEFAULT),
                     ':e'    => $email,
                     ':f'    => $fullName,
                     ':ph'   => $phone !== '' ? $phone : null,
+                ]);
+
+                // The individual's customer record: who documents are prepared
+                // for. Individuals have no branch — branches belong to B2B
+                // companies only. Also the backfill the older logins did
+                // through database/migrate-customer-model.sql.
+                $clientId = next_id($pdo, 'client', 'ClientID');
+                $pdo->prepare(
+                    "INSERT INTO client (ClientID, UserID, CompanyName, ContactPerson, Email, Phone, Address, AccountType)
+                     VALUES (:id, :uid, :cn, :cp, :e, :ph, NULL, 'individual')"
+                )->execute([
+                    ':id' => $clientId,
+                    ':uid' => $userId,
+                    ':cn' => $fullName,
+                    ':cp' => $fullName,
+                    ':e'  => $email,
+                    ':ph' => $phone !== '' ? $phone : null,
                 ]);
                 $pdo->commit();
 
@@ -155,7 +173,7 @@ ajax_errors($errors);
                 <input class="form-control" type="password" id="password_confirm" name="password_confirm" minlength="6" required>
               </div>
               <div class="col-12">
-                <div class="form-note"><i class="fa-solid fa-circle-info me-2"></i>New accounts get the <strong>Client Account</strong> role. Staff accounts (Admin, Sales Manager, Inventory Manager) are created by the administrator.</div>
+                <div class="form-note"><i class="fa-solid fa-circle-info me-2"></i>Your account is a <strong>customer account</strong> — it holds no SebaBD staff role. Buying is simple: shop, place orders, request quotations. Companies that buy for an organisation should use <a href="b2b-registration.php" class="fw-semibold">B2B registration</a> instead.</div>
               </div>
               <div class="col-12 d-grid gap-2 d-sm-flex">
                 <button class="btn btn-accent" type="submit">Create account</button>

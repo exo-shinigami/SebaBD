@@ -3,8 +3,10 @@
  * SebaBD — invoicing & receivables report.
  *
  * What has been billed, what has actually been collected, and what clients
- * still owe. Invoices are linked to the client through their branch, and
- * payment_receipt rows show the money coming in.
+ * still owe. An invoice is owned by its customer (invoice.ClientID — a company
+ * for a B2B invoice, a personal record for an individual); the branch is
+ * optional detail some invoices do not carry, and payment_receipt rows show
+ * the money coming in.
  */
 
 if (!defined('SEBABD_REPORTS')) {
@@ -54,14 +56,17 @@ class InvoiceReport extends SebaBdReport
         )->pipe($this->dataStore('by_status'));
 
         /* Who owes what ----------------------------------------------------- */
+        /* Ownership is invoice.ClientID — the customer the invoice was raised
+         * for. The branch is optional detail some invoices (individual
+         * customers, retail orders) do not carry, so a branch-joined query
+         * would drop them from the totals. */
         $this->src('db')->query(
             "SELECT cl.CompanyName        AS Client,
                     COUNT(i.InvoiceNo)    AS Invoices,
                     SUM(i.TotalAmount)    AS Billed,
                     SUM(i.RemainingBalance) AS Outstanding
              FROM invoice i
-             JOIN client_branch b ON b.BranchID = i.BranchID
-             JOIN client cl       ON cl.ClientID = b.ClientID
+             LEFT JOIN client cl ON cl.ClientID = i.ClientID
              GROUP BY cl.ClientID, cl.CompanyName
              ORDER BY Outstanding DESC, Billed DESC"
         )->pipe($this->dataStore('by_client'));
@@ -87,8 +92,7 @@ class InvoiceReport extends SebaBdReport
                     i.TotalAmount                                   AS Total,
                     i.RemainingBalance                              AS Outstanding
              FROM invoice i
-             JOIN client_branch b ON b.BranchID = i.BranchID
-             JOIN client cl       ON cl.ClientID = b.ClientID
+             LEFT JOIN client cl ON cl.ClientID = i.ClientID
              WHERE i.RemainingBalance > 0
              ORDER BY BucketOrder, i.InvoiceDate"
         )->pipe($this->dataStore('outstanding'));
@@ -103,8 +107,7 @@ class InvoiceReport extends SebaBdReport
                     i.RemainingBalance                             AS Outstanding,
                     i.AmountInWords                                AS AmountInWords
              FROM invoice i
-             LEFT JOIN client_branch b ON b.BranchID = i.BranchID
-             LEFT JOIN client cl       ON cl.ClientID = b.ClientID
+             LEFT JOIN client cl ON cl.ClientID = i.ClientID
              ORDER BY i.InvoiceDate DESC"
         )->pipe($this->dataStore('invoices'));
 
@@ -119,8 +122,7 @@ class InvoiceReport extends SebaBdReport
                     r.ReceivedBy                                   AS ReceivedBy
              FROM payment_receipt r
              JOIN invoice i            ON i.InvoiceNo = r.InvoiceNo
-             LEFT JOIN client_branch b ON b.BranchID = i.BranchID
-             LEFT JOIN client cl       ON cl.ClientID = b.ClientID
+             LEFT JOIN client cl       ON cl.ClientID = i.ClientID
              ORDER BY r.ReceiptDate DESC"
         )->pipe($this->dataStore('receipts'));
 
@@ -140,8 +142,7 @@ class InvoiceReport extends SebaBdReport
                     SUM(i.TotalAmount)  AS Billed,
                     SUM(i.RemainingBalance) AS Outstanding
              FROM invoice i
-             JOIN client_branch b ON b.BranchID = i.BranchID
-             JOIN client cl       ON cl.ClientID = b.ClientID
+             LEFT JOIN client cl ON cl.ClientID = i.ClientID
              GROUP BY cl.ClientID, cl.CompanyName"
         )
             ->pipe(new CalculatedColumn([

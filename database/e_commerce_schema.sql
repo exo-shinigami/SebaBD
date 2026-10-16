@@ -56,7 +56,9 @@ CREATE TABLE `client` (
   `ContactPerson` varchar(255) DEFAULT NULL,
   `Email` varchar(255) DEFAULT NULL,
   `Phone` varchar(50) DEFAULT NULL,
-  `Address` text DEFAULT NULL
+  `Address` text DEFAULT NULL,
+  `AccountType` varchar(20) NOT NULL DEFAULT 'b2b'
+    COMMENT 'individual | b2b | house. Individuals have no branch; house = filing address (walk-in / internal)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -82,6 +84,7 @@ CREATE TABLE `client_branch` (
 CREATE TABLE `invoice` (
   `InvoiceNo` int(11) NOT NULL,
   `BranchID` int(11) DEFAULT NULL,
+  `ClientID` int(11) DEFAULT NULL COMMENT 'who owns the document — mirrors quotation.ClientID when it was converted',
   `QuotationNo` int(11) DEFAULT NULL,
   `OrderID` int(11) DEFAULT NULL,
   `InvoiceDate` date NOT NULL,
@@ -227,7 +230,8 @@ CREATE TABLE `purchase_order` (
 
 CREATE TABLE `quotation` (
   `QuotationNo` int(11) NOT NULL,
-  `BranchID` int(11) NOT NULL,
+  `BranchID` int(11) DEFAULT NULL COMMENT 'NULL for an individual customer or a house filing without an office',
+  `ClientID` int(11) DEFAULT NULL COMMENT 'who owns the document — the customer the quotation was prepared for',
   `QuotationDate` date NOT NULL,
   `Subject` varchar(255) DEFAULT NULL,
   `TotalAmount` decimal(12,2) NOT NULL,
@@ -270,7 +274,7 @@ CREATE TABLE `role` (
 
 CREATE TABLE `user` (
   `UserID` int(11) NOT NULL,
-  `RoleID` int(11) NOT NULL,
+  `RoleID` int(11) DEFAULT NULL COMMENT 'NULL for customer logins — only SebaBD staff hold a role',
   `Username` varchar(100) NOT NULL,
   `PasswordHash` varchar(255) NOT NULL,
   `Email` varchar(255) NOT NULL,
@@ -324,7 +328,8 @@ ALTER TABLE `invoice`
   ADD PRIMARY KEY (`InvoiceNo`),
   ADD UNIQUE KEY `QuotationNo` (`QuotationNo`),
   ADD UNIQUE KEY `OrderID` (`OrderID`),
-  ADD KEY `BranchID` (`BranchID`);
+  ADD KEY `BranchID` (`BranchID`),
+  ADD KEY `ClientID` (`ClientID`);
 
 --
 -- Indexes for table `invoice_item`
@@ -394,7 +399,8 @@ ALTER TABLE `purchase_order`
 --
 ALTER TABLE `quotation`
   ADD PRIMARY KEY (`QuotationNo`),
-  ADD KEY `BranchID` (`BranchID`);
+  ADD KEY `BranchID` (`BranchID`),
+  ADD KEY `ClientID` (`ClientID`);
 
 --
 -- Indexes for table `quotation_item`
@@ -448,7 +454,8 @@ ALTER TABLE `client_branch`
 ALTER TABLE `invoice`
   ADD CONSTRAINT `invoice_ibfk_1` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`),
   ADD CONSTRAINT `invoice_ibfk_2` FOREIGN KEY (`QuotationNo`) REFERENCES `quotation` (`QuotationNo`),
-  ADD CONSTRAINT `invoice_ibfk_3` FOREIGN KEY (`OrderID`) REFERENCES `order` (`OrderID`);
+  ADD CONSTRAINT `invoice_ibfk_3` FOREIGN KEY (`OrderID`) REFERENCES `order` (`OrderID`),
+  ADD CONSTRAINT `invoice_ibfk_4` FOREIGN KEY (`ClientID`) REFERENCES `client` (`ClientID`);
 
 --
 -- Constraints for table `invoice_item`
@@ -508,7 +515,8 @@ ALTER TABLE `purchase_order`
 -- Constraints for table `quotation`
 --
 ALTER TABLE `quotation`
-  ADD CONSTRAINT `quotation_ibfk_1` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`);
+  ADD CONSTRAINT `quotation_ibfk_1` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`),
+  ADD CONSTRAINT `quotation_ibfk_2` FOREIGN KEY (`ClientID`) REFERENCES `client` (`ClientID`);
 
 --
 -- Constraints for table `quotation_item`
@@ -531,10 +539,10 @@ COMMIT;
 -- internal order are both addressed to a branch, and these are the branches
 -- they use. Same rows as database/e_commerce.sql and as the migration.
 --
-INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Email`, `Phone`, `Address`) VALUES
-(1, NULL, 'Walk-in Customers', 'Retail Customer', 'sales@sebabd.com', NULL, 'Dhaka, Bangladesh'),
+INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Email`, `Phone`, `Address`, `AccountType`) VALUES
+(1, NULL, 'Walk-in Customers', 'Retail Customer', 'sales@sebabd.com', NULL, 'Dhaka, Bangladesh', 'house'),
 (2, NULL, 'SebaBD Internal Operations', 'SebaBD Operations Desk', 'operations@sebabd.com', '+880 1711 100100',
- 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh');
+ 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh', 'house');
 
 INSERT INTO `client_branch` (`BranchID`, `ClientID`, `BranchName`, `BranchAddress`, `ContactNo`) VALUES
 (1, 1, 'Dhaka Sales Counter', 'Dhaka, Bangladesh', NULL),

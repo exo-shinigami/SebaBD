@@ -36,8 +36,12 @@ $current  = (float) ($product['StandardPrice'] ?? 0);
 $wasPrice = !empty($product['sale']) && (float) $product['sale'] > $current ? (float) $product['sale'] : 0.0;
 $discount = $wasPrice > 0 ? ($wasPrice - $current) / $wasPrice * 100 : 0.0;
 
-$orderUrl     = 'order.php?product=' . $productId . '&qty=1';
-$quotationUrl = 'quotation-request.php?product=' . $productId . '&qty=1';
+// Buying and quoting are customer actions. A signed-in staff member browsing
+// the catalog sees the product page without the purchase controls — the
+// write paths refuse them anyway, so hiding here is not the only barrier.
+$canBuy = !is_staff_user();
+$orderUrl     = $canBuy ? 'order.php?product=' . $productId . '&qty=1' : '';
+$quotationUrl = $canBuy ? 'quotation-request.php?product=' . $productId . '&qty=1' : '';
 ?>
 <?= partial_render('partials/header.php', ['page_title' => $page_title, 'active_nav' => 'shop']) ?>
 
@@ -99,6 +103,7 @@ $quotationUrl = 'quotation-request.php?product=' . $productId . '&qty=1';
             </span>
           </div>
 
+          <?php if ($canBuy): ?>
           <!-- Buying: add to the basket with a quantity of your own, or go
                straight to the quick-order form for a multi-line order. -->
           <form class="product-buy" method="post" action="cart.php" data-ajax>
@@ -124,6 +129,13 @@ $quotationUrl = 'quotation-request.php?product=' . $productId . '&qty=1';
               submitted without an account.
             </p>
           </form>
+          <?php else: ?>
+          <div class="alert alert-light border small mb-4">
+            <i class="fa-solid fa-building-shield me-1"></i>
+            You are signed in as SebaBD staff — buying and quotation requests are customer actions.
+            Stock intake happens through <a href="admin-purchase-orders.php">purchase orders</a>.
+          </div>
+          <?php endif; ?>
 
           <div class="report-panel mb-0">
             <div class="report-panel-head">

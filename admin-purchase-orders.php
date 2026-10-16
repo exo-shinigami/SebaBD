@@ -408,7 +408,7 @@ $filterQs = http_build_query(array_filter([
 $listUrl  = 'admin-purchase-orders.php' . ($filterQs !== '' ? '?' . $filterQs : '');
 
 echo partial_render('partials/header.php', ['page_title' => 'Purchase orders', 'active_nav' => 'admin']);
-echo admin_lead('Purchase orders', 'Order stock from a supplier, print the order, then receive it into the inventory — as a bulk quantity or as individual serialized units.');
+echo admin_lead('Purchase orders', 'Your own procurement record: order stock from a supplier, print the order, then receive it into the inventory — as a bulk quantity or as individual serialized units. The vendor never confirms or ships in the system; receiving is recorded by your staff.');
 ?>
 
 <div class="container pb-5">

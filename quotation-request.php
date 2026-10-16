@@ -1,7 +1,11 @@
 <?php
 require_once __DIR__ . '/helpers.php';
 
+// Quotation requests are a customer action — individual customers, B2B
+// companies and signed-out visitors. Signed-in staff are refused here like
+// everywhere else in the storefront ordering flow.
 $user = current_user();
+refuse_staff_order($user);
 $errors = [];
 
 // ?product=<id>&qty=<n> — product cards and product.php link here so the
@@ -9,15 +13,13 @@ $errors = [];
 $prefillProduct = max(0, (int) ($_GET['product'] ?? 0));
 $prefillQty     = max(1, min(999, (int) ($_GET['qty'] ?? 1)));
 
-// Clients with branches (only shown to logged-in client accounts).
+// B2B companies with branches pick which office a quotation is for.
+// Individuals (registered customers) file under their own client row with no
+// branch; visitors are logged against the Walk-in house account.
 $client = null;
 $branches = [];
 if ($user) {
-    $rows = db_fetch_all(
-        'SELECT ClientID, CompanyName FROM client WHERE UserID = :uid LIMIT 1',
-        [':uid' => (int) $user['UserID']]
-    );
-    $client = $rows[0] ?? null;
+    $client = customer_client($user);
     if ($client) {
         $branches = db_fetch_all(
             'SELECT BranchID, BranchName FROM client_branch WHERE ClientID = :cid ORDER BY BranchID',
@@ -27,14 +29,12 @@ if ($user) {
 }
 
 /**
- * How this request is filed — three distinct paths, three distinct owners:
- *
- *   internal  a signed-in SebaBD staff member requesting for the company itself
- *   client    a signed-in company account, using one of its own branches
- *   walkin    a visitor with no company, filed under the Walk-in house account
+ * How this request is filed — a B2B request names a branch and belongs to the
+ * company; an individual request has no branch and belongs to their own
+ * client record; a visitor (not signed in, no company) is logged under the
+ * shared Walk-in house account, exactly as it always was.
  */
-$filedUnder = is_staff_user($user) ? 'internal'
-    : (($client && $branches) ? 'client' : 'walkin');
+$filedUnder = ($client && $branches) ? 'client' : (($client) ? 'individual' : 'walkin');
 $accounts = system_accounts();
 
 $catalog = db_fetch_all(
@@ -64,8 +64,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($subject === '') $errors[] = 'Please give the quotation a short subject.';
 
-    // Branch is required when the signed-in account is a registered client.
-    if ($client && !$branches) {
+    // Branch is required only for a B2B company (which always has at least the
+    // branch created at registration).
+    if ($filedUnder === 'client' && !$branches) {
         $errors[] = 'No branch found for your company — please contact support.';
     }
 
@@ -106,23 +107,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // quotation succeed or fail together, so a half-filed request (or a
             // house account created for a quotation that was never written)
             // cannot be left behind.
-            $result = db_transaction($pdo, function (PDO $tx) use ($filedUnder, $branches, $branchId, $subject, $lines, $contact, $contactPh, $contactEm) {
-                if ($filedUnder === 'internal') {
-                    // Staff are buying for SebaBD, not for a customer: the request
-                    // is booked to the internal house account.
-                    $branch = internal_branch_id($tx);
-                } elseif ($filedUnder === 'client') {
-                    $allowed = array_map('intval', array_column($branches, 'BranchID'));
-                    $branch  = in_array($branchId, $allowed, true) ? $branchId : (int) $allowed[0];
+            $result = db_transaction($pdo, function (PDO $tx) use ($user, $client, $filedUnder, $branches, $branchId, $subject, $lines, $contact, $contactPh, $contactEm) {
+                // Resolve the owner (quotation.ClientID) and, where there is
+                // one, the branch (quotation.BranchID):
+                //
+                //   client      B2B company — ClientID = the company, BranchID
+                //               = the branch the visitor picked
+                //   individual  a registered individual — ClientID = their own
+                //               client row, BranchID = NULL (individuals have
+                //               no branch)
+                //   walkin      visitor — ClientID = the Walk-in house
+                //               account, BranchID = its sales-counter branch
+                if ($filedUnder === 'client') {
+                    $allowed  = array_map('intval', array_column($branches, 'BranchID'));
+                    $branch   = in_array($branchId, $allowed, true) ? $branchId : (int) $allowed[0];
+                    $clientId = (int) $client['ClientID'];
+                } elseif ($filedUnder === 'individual') {
+                    $branch   = null;
+                    $clientId = (int) ($client['ClientID'] ?? 0) ?: null;
                 } else {
                     // No company on this request: file it under the shared
-                    // Walk-in account. It is seeded by the migration and created
-                    // here on first use, so quotation.BranchID always resolves.
-                    $branch = walkin_branch_id($tx, [
+                    // Walk-in account. It is seeded by the migration and
+                    // created here on first use, so the foreign keys resolve.
+                    $branch   = walkin_branch_id($tx, [
                         'contact' => $contact !== '' ? $contact : 'Retail Customer',
                         'email'   => $contactEm !== '' ? $contactEm : 'sales@sebabd.com',
                         'phone'   => $contactPh !== '' ? $contactPh : null,
                     ]);
+                    // The house client the counter branch belongs to is the
+                    // quotation's owner, so customer-visible pages can filter
+                    // Walk-in documents out of another customer's list.
+                    $house    = db_fetch_all(
+                        'SELECT c.ClientID FROM client c
+                         JOIN client_branch b ON b.ClientID = c.ClientID
+                         WHERE b.BranchID = :id LIMIT 1',
+                        [':id' => $branch]
+                    );
+                    $clientId = (int) ($house[0]['ClientID'] ?? 0) ?: null;
                 }
 
                 $total = 0.0;
@@ -133,6 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $qno = db_insert($tx, 'quotation', [
                     'BranchID'      => $branch,
+                    'ClientID'      => $clientId,
                     'QuotationDate' => date('Y-m-d'),
                     'Subject'       => $subject,
                     'TotalAmount'   => $total,
@@ -160,9 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             clear_old();
 
             $flash = 'Quotation #' . $result['no'] . ' submitted — total ' . money($result['total']) . '. '
-                . ($filedUnder === 'internal'
-                    ? 'Filed internally under ' . $accounts['internal']['branch'] . '; the back office prices it from there.'
-                    : 'Our sales team will contact you within 1 business day.');
+                . 'Our sales team will contact you within 1 business day.';
             flash_set('success', $flash);
             // AJAX callers get {ok:true, redirect:…} instead of a 302.
             post_success('quotation-request.php');
@@ -211,13 +231,11 @@ ajax_errors($errors);
             <p class="text-muted small mb-0">Corporate procurement? Tell us what you need and our sales team will respond with pricing and warranty terms.</p>
           </div>
 
-          <?php if ($filedUnder === 'internal'): ?>
+          <?php if ($filedUnder === 'individual'): ?>
           <div class="alert alert-light border">
-            <i class="fa-solid fa-building-shield me-2"></i>
-            You are signed in as <strong><?= htmlspecialchars($user['FullName']) ?></strong>
-            (<?= htmlspecialchars($user['RoleName']) ?>), so this is an <strong>internal request</strong>.
-            It is booked to <?= htmlspecialchars($accounts['internal']['branch']) ?> and shows in the back office
-            as SebaBD's own procurement rather than in a customer's file.
+            <i class="fa-solid fa-user me-2"></i>
+            You are signed in as <strong><?= htmlspecialchars((string) ($user['FullName'] ?? '')) ?></strong>,
+            so this quotation is prepared for <strong>your own account</strong> — no branch, no company record.
           </div>
           <?php endif; ?>
 
@@ -239,11 +257,11 @@ ajax_errors($errors);
                 <label class="form-label" for="subject">Subject <span class="req">*</span></label>
                 <input class="form-control" id="subject" name="subject" value="<?= old('subject') ?>" placeholder="e.g. 10 office workstations" required>
               </div>
-              <?php if ($filedUnder === 'internal'): ?>
+              <?php if ($filedUnder === 'individual'): ?>
               <div class="col-md-5">
-                <label class="form-label">Filed under</label>
-                <input class="form-control" value="<?= htmlspecialchars($accounts['internal']['company']) ?>" readonly>
-                <div class="form-text">Internal — <?= htmlspecialchars($accounts['internal']['branch']) ?></div>
+                <label class="form-label">Prepared for</label>
+                <input class="form-control" value="You (your SebaBD account)" readonly>
+                <div class="form-text">Individual customer — no branch on the paperwork.</div>
               </div>
               <?php elseif ($filedUnder === 'client'): ?>
               <div class="col-md-5">

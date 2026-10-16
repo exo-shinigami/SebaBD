@@ -13,12 +13,11 @@
  * is raised and the units are attached (see admin-invoices.php), because the
  * money and the goods have to move together.
  *
- * Two channels share this one form (see order_type_for() in helpers.php):
- *
- *   Retail    a customer ordering for themselves — OrderType 'Retail', no branch
- *   Internal  a signed-in staff member ordering for SebaBD — OrderType
- *             'Internal', booked to the internal house branch, so the order is
- *             tracked as the company's own purchase instead of a customer sale.
+ * Ordering is a customer action only. Signed-in SebaBD staff are refused
+ * (refuse_staff_order() in helpers.php) — both the checkout POST and the page
+ * itself, so a staff login cannot place an order from the storefront at all.
+ * The buyer may be a registered individual, a B2B contact or a visitor who is
+ * asked to sign in before the order is written.
  *
  * A basket may hold more than is on the shelf: the store sources to order, so
  * the cart says so plainly instead of refusing the sale, and the back office
@@ -27,9 +26,17 @@
 require_once __DIR__ . '/helpers.php';
 require_once __DIR__ . '/cart-data.php';
 
-$user   = current_user();
-$errors = [];
-$notice = '';
+$user    = current_user();
+$errors  = [];
+$notice  = '';
+$isStaff = is_staff_user($user);
+
+// Staff may look at the basket page but never write to it (add, update,
+// clear or checkout): ordering belongs to customers. A constructed POST
+// from a staff session gets a 403 before it touches the database.
+if ($isStaff && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    refuse_staff_order($user);
+}
 
 /* ---------------------------------------------------------------- add to cart
  * Kept before any layout so the button works from the catalog, a product page
@@ -171,19 +178,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ajax_errors($errors);
             } else {
                 try {
-                    // Staff buy for SebaBD, everyone else buys for themselves.
-                    $orderType = order_type_for($user);
-
-                    $orderId = db_transaction($pdo, function (PDO $tx) use ($user, $lines, $totals, $address, $note, $orderType) {
+                    // Every storefront order is a customer order: Retail,
+                    // booked to no branch (it hangs off the user). Staff never
+                    // reach this point — refuse_staff_order() stopped them.
+                    $orderId = db_transaction($pdo, function (PDO $tx) use ($user, $lines, $totals, $address, $note) {
                         $orderId = db_insert($tx, 'order', [
                             'UserID'          => (int) $user['UserID'],
                             'OrderDate'       => date('Y-m-d H:i:s'),
                             'TotalAmount'     => $totals['subtotal'],
                             'OrderStatus'     => 'Pending',
-                            'OrderType'       => $orderType,
-                            // NULL for a customer order; the internal branch for a
-                            // staff order, so the goods and the paperwork agree.
-                            'BranchID'        => order_branch_id($tx, $orderType),
+                            'OrderType'       => ORDER_TYPE_RETAIL,
+                            'BranchID'        => null,
                             'ShippingAddress' => $address . ($note !== '' ? "\n\nNote: " . $note : ''),
                         ], 'OrderID');
 
@@ -202,11 +207,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     cart_clear();
                     clear_old();
-                    flash_set('success', $orderType === ORDER_TYPE_INTERNAL
-                        ? 'Internal order #' . $orderId . ' created — booked to '
-                            . system_accounts()['internal']['branch'] . '. It is kept apart from customer orders in the back office.'
-                        : 'Thank you — order #' . $orderId . ' has been placed. '
-                            . 'The sales team confirms it and raises the invoice next.');
+                    flash_set('success', 'Thank you — order #' . $orderId . ' has been placed. '
+                        . 'The sales team confirms it and raises the invoice next.');
                     post_success('order-detail.php?id=' . $orderId . '&placed=1');
                 } catch (Throwable $e) {
                     $errors[] = 'The order could not be saved: ' . $e->getMessage();
@@ -215,6 +217,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+}
+
+/* ------------------------------------------------- staff are not shoppers */
+/* A signed-in staff account cannot order from the storefront: hide the basket
+   actions and the checkout form, and refuse the write paths themselves, so a
+   constructed POST gets a 403 rather than an order.
+   A staff user's ORDER is placed only in the back-office purchase-order
+   module (procurement), never as a customer sale. */
+if ($isStaff) {
+    refuse_staff_order($user);
 }
 
 /* Re-read after any successful write so the page always shows what is stored. */
@@ -428,14 +440,17 @@ $page_title = 'Your basket';
           <?php endif; ?>
 
           <?php if ($user && is_staff_user($user)): ?>
-          <div class="alert alert-light border small">
+          <div class="alert alert-warning small">
             <i class="fa-solid fa-building-shield me-1"></i>
-            You are signed in as staff, so this is recorded as an <strong>internal</strong> order for
-            <?= htmlspecialchars(system_accounts()['internal']['branch']) ?> rather than a customer sale.
+            Staff accounts do not shop here. You are signed in as
+            <strong><?= htmlspecialchars((string) ($user['RoleName'] ?? 'staff')) ?></strong> — SebaBD buys stock
+            through <a href="admin-purchase-orders.php">purchase orders</a>, not the storefront.
           </div>
           <?php endif; ?>
 
-          <?php if (!$user): ?>
+          <?php if ($isStaff): ?>
+          <?php /* the staff notice above replaces checkout entirely */ ?>
+          <?php elseif (!$user): ?>
           <div class="alert alert-light border small">
             <i class="fa-solid fa-user-lock me-1"></i>You are not signed in. Your basket is kept — sign in
             and you will come straight back here to finish.
@@ -480,7 +495,6 @@ $page_title = 'Your basket';
 
           <hr class="my-4">
           <div class="small text-muted">
-            <p class="mb-1"><i class="fa-solid fa-shield-halved me-1"></i>Signed in as staff? Your order is filed as an internal SebaBD order, separate from customer orders.</p>
             <p class="mb-0">Need a formal quote first? <a href="quotation-request.php">Request a quotation</a> and a sales manager will price it for your company.</p>
           </div>
         </div>

@@ -90,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'list';
     } else {
         $editId     = post_int('quotation_no');
+        $clientId   = post_int('client_id');
         $branchId   = post_int('branch_id');
         $subject    = post_str('subject');
         $quoteDate  = post_str('quotation_date', date('Y-m-d'));
@@ -102,8 +103,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // fact, so it is read from the catalog row below and any posted value is
         // discarded (the database trigger enforces the same rule).
 
-        if ($branchId <= 0) {
-            $errors[] = 'Choose the customer branch this quotation is addressed to.';
+        // The owner is required: the customer this quotation is prepared for
+        // (a company OR an individual client record). A branch is optional —
+        // it only exists for B2B clients.
+        if ($clientId <= 0) {
+            $errors[] = 'Choose the customer this quotation is prepared for.';
+        } else {
+            $owner = db_fetch_all(
+                "SELECT ClientID, AccountType FROM client
+                 WHERE ClientID = :id AND IFNULL(AccountType, 'b2b') <> 'house'",
+                [':id' => $clientId]
+            );
+            if (!$owner) {
+                $errors[] = 'That customer record does not exist.';
+            } else {
+                if ($branchId > 0) {
+                    $branchOk = db_fetch_all(
+                        'SELECT BranchID FROM client_branch WHERE BranchID = :id AND ClientID = :cid',
+                        [':id' => $branchId, ':cid' => $clientId]
+                    );
+                    if (!$branchOk) {
+                        $errors[] = 'That branch does not belong to the chosen customer.';
+                    }
+                } elseif (($owner[0]['AccountType'] ?? 'b2b') === 'b2b' && $editId === 0) {
+                    // New quotation for a B2B client without a branch — their
+                    // offices are how paperwork is addressed.
+                    $theirBranches = db_count('client_branch', 'ClientID = :cid', [':cid' => $clientId]);
+                    if ($theirBranches === 0) {
+                        $errors[] = 'That company has no branch on file — add one in Customers first, or leave the quotation branchless.';
+                    }
+                }
+            }
         }
         if ($subject === '') {
             $errors[] = 'Give the quotation a short subject, for example “Office IT upgrade”.';
@@ -173,9 +203,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $total = round($total, 2);
 
             try {
-                $work = function (PDO $tx) use ($editId, $branchId, $subject, $quoteDate, $status, $lines, $total) {
+                $work = function (PDO $tx) use ($editId, $clientId, $branchId, $subject, $quoteDate, $status, $lines, $total) {
                     $header = [
-                        'BranchID'      => $branchId,
+                        'BranchID'      => $branchId > 0 ? $branchId : null,
+                        'ClientID'      => $clientId,
                         'QuotationDate' => $quoteDate,
                         'Subject'       => $subject,
                         'TotalAmount'   => $total,
@@ -234,6 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id     = $editId;
         keep_old([
             'subject'        => $subject,
+            'client_id'      => $clientId,
             'branch_id'      => $branchId,
             'quotation_date' => $quoteDate,
             'status'         => $status,
@@ -275,8 +307,19 @@ $branchOriginBadge = function (int $branchId) use (&$systemBranches): string {
     return '';
 };
 
+// The customer records quotations can be addressed to — companies and
+// individuals alike (house accounts excluded), for the filter and the
+// creation form.
+$clients = [];
+
 if ($dbUp) {
     $systemBranches = system_branch_ids();
+
+    $clients = db_fetch_all(
+        "SELECT ClientID, CompanyName, AccountType FROM client
+         WHERE IFNULL(AccountType, 'b2b') <> 'house'
+         ORDER BY CompanyName"
+    );
 
     $catalog = db_fetch_all(
         'SELECT p.ProductID, p.ProductName, p.StandardPrice, p.DefaultWarrantyMonths, c.CategoryName
@@ -292,13 +335,13 @@ if ($dbUp) {
 
     if ($action === 'view' || $action === 'edit') {
         $found = db_fetch_all(
-            'SELECT q.QuotationNo, q.BranchID, q.QuotationDate, q.Subject, q.TotalAmount,
+            'SELECT q.QuotationNo, q.BranchID, q.ClientID, q.QuotationDate, q.Subject, q.TotalAmount,
                     q.AmountInWords, q.Status,
                     b.BranchName, b.BranchAddress, b.ContactNo,
-                    c.ClientID, c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address
+                    c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address, c.AccountType
              FROM quotation q
-             JOIN client_branch b ON b.BranchID = q.BranchID
-             JOIN client c ON c.ClientID = b.ClientID
+             LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+             LEFT JOIN client c ON c.ClientID = q.ClientID
              WHERE q.QuotationNo = :id',
             [':id' => $id]
         );
@@ -346,22 +389,23 @@ if ($dbUp) {
     }
     if ($search !== '') {
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
-        $where[] = '(q.Subject LIKE :q1 OR c.CompanyName LIKE :q2 OR b.BranchName LIKE :q3)';
+        $where[] = '(q.Subject LIKE :q1 OR c.CompanyName LIKE :q2 OR b.BranchName LIKE :q3 OR q.QuotationNo = :q4)';
         $params[':q1'] = $like;
         $params[':q2'] = $like;
         $params[':q3'] = $like;
+        $params[':q4'] = (int) $search;
     }
     $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
     $from     = ' FROM quotation q
-                  JOIN client_branch b ON b.BranchID = q.BranchID
-                  JOIN client c ON c.ClientID = b.ClientID';
+                  LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+                  LEFT JOIN client c ON c.ClientID = q.ClientID';
 
     $countRow  = db_fetch_all('SELECT COUNT(*) AS n' . $from . $whereSql, $params);
     $quotePage = paginate((int) ($countRow[0]['n'] ?? 0), 20);
 
     $rows = db_fetch_all(
-        'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status, q.BranchID,
-                b.BranchName, c.ClientID, c.CompanyName,
+        'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status, q.BranchID, q.ClientID,
+                b.BranchName, c.CompanyName, c.AccountType,
                 (SELECT COUNT(*) FROM quotation_item qi WHERE qi.QuotationNo = q.QuotationNo) AS `Lines`,
                 (SELECT i.InvoiceNo FROM invoice i WHERE i.QuotationNo = q.QuotationNo) AS InvoiceNo'
         . $from . $whereSql . '
@@ -444,16 +488,11 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
         </select>
       </label>
       <label class="report-filter-field">
-        <span class="form-label">Company</span>
+        <span class="form-label">Customer</span>
         <select class="form-select form-select-sm" name="client">
-          <option value="0">All companies</option>
-          <?php
-          $companies = [];
-          foreach ($branches as $branch) {
-              $companies[(int) $branch['ClientID']] = $branch['CompanyName'];
-          }
-          foreach ($companies as $companyId => $companyName): ?>
-          <option value="<?= $companyId ?>" <?= $filterClient === $companyId ? 'selected' : '' ?>><?= htmlspecialchars($companyName) ?></option>
+          <option value="0">All customers</option>
+          <?php foreach ($clients as $clientOpt): ?>
+          <option value="<?= (int) $clientOpt['ClientID'] ?>" <?= $filterClient === (int) $clientOpt['ClientID'] ? 'selected' : '' ?>><?= htmlspecialchars($clientOpt['CompanyName']) ?></option>
           <?php endforeach; ?>
         </select>
       </label>
@@ -504,10 +543,14 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
               '<a class="text-decoration-none" href="admin-quotations.php?action=view&id=' . (int) $row['QuotationNo'] . '">'
                   . (int) $row['QuotationNo'] . '</a>',
               format_date($row['QuotationDate']),
-              '<a class="text-decoration-none" href="admin-customers.php?action=edit&id=' . (int) $row['ClientID'] . '">'
-                  . htmlspecialchars($row['CompanyName']) . '</a>'
+              '<a class="text-decoration-none" href="admin-customers.php?action=edit&id=' . (int) ($row['ClientID'] ?? 0) . '">'
+                  . htmlspecialchars((string) ($row['CompanyName'] ?? '—')) . '</a>'
                   . $branchOriginBadge((int) $row['BranchID'])
-                  . '<small class="d-block text-muted">' . htmlspecialchars($row['BranchName']) . '</small>',
+                  . '<small class="d-block text-muted">'
+                  . (!empty($row['BranchName'])
+                      ? htmlspecialchars((string) $row['BranchName'])
+                      : ($row['ClientID'] !== null ? 'individual — no branch' : '—'))
+                  . '</small>',
               htmlspecialchars((string) $row['Subject']),
               (int) $row['Lines'],
               '<span class="admin-line-total">' . money($row['TotalAmount']) . '</span>',
@@ -545,7 +588,8 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
           <div>
             <h2 class="report-panel-title">Quotation #<?= (int) $quote['QuotationNo'] ?></h2>
             <p class="report-panel-sub">
-              <?= htmlspecialchars($quote['CompanyName']) ?> — <?= htmlspecialchars($quote['BranchName']) ?>
+              <?= htmlspecialchars((string) ($quote['CompanyName'] ?? '—')) ?>
+              <?= !empty($quote['BranchName']) ? ' — ' . htmlspecialchars($quote['BranchName']) : ' (individual — no branch)' ?>
               <?= $branchOriginBadge((int) $quote['BranchID']) ?>
               · <?= format_date($quote['QuotationDate']) ?>
             </p>
@@ -690,33 +734,30 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
           }
       }
 
+      // Prefill from the inbound link: ?client=<id> prepares for that
+      // customer; ?branch=<id> implies its client as well. Branches no longer
+      // belong to every quotation — an individual customer has none.
       $prefillBranch = max(0, (int) ($_GET['branch'] ?? $_GET['client'] ?? 0));
-      $prefillClient = max(0, (int) ($_GET['client'] ?? 0));
-      if (!$oldLines && $prefillBranch > 0) {
+      $prefillClient = $isEdit ? (int) $quote['ClientID'] : max(0, (int) ($_GET['client'] ?? 0));
+      if ($prefillBranch > 0) {
           foreach ($branches as $branch) {
-              if ((int) $branch['BranchID'] === $prefillBranch || (!$prefillBranch && (int) $branch['ClientID'] === $prefillClient)) {
-                  $prefillBranch = (int) $branch['BranchID'];
+              if ((int) $branch['BranchID'] === $prefillBranch) {
+                  $prefillClient = (int) $branch['ClientID'];
                   break;
-              }
-          }
-          if ($prefillClient > 0) {
-              foreach ($branches as $branch) {
-                  if ((int) $branch['ClientID'] === $prefillClient) {
-                      $prefillBranch = (int) $branch['BranchID'];
-                      break;
-                  }
               }
           }
       }
 
       $formValues = [
           'QuotationNo'   => $isEdit ? (int) $quote['QuotationNo'] : $nextFreeNo,
-          'BranchID'      => $isEdit ? (int) $quote['BranchID'] : $prefillBranch,
+          'ClientID'      => $prefillClient,
+          'BranchID'      => $isEdit ? (int) $quote['BranchID'] : ($prefillClient && $prefillBranch ? $prefillBranch : 0),
           'QuotationDate' => $isEdit ? (string) $quote['QuotationDate'] : date('Y-m-d'),
           'Subject'       => $isEdit ? (string) $quote['Subject'] : '',
           'Status'        => $isEdit ? (string) $quote['Status'] : 'Pending',
       ];
       if ($errors) {
+          $formValues['ClientID']      = post_int('client_id', $formValues['ClientID']);
           $formValues['BranchID']      = post_int('branch_id', $formValues['BranchID']);
           $formValues['QuotationDate'] = post_str('quotation_date', $formValues['QuotationDate']);
           $formValues['Subject']       = post_str('subject');
@@ -736,10 +777,10 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
           </p>
         </div>
 
-        <?php if (!$branches): ?>
+        <?php if (!$clients): ?>
         <div class="alert alert-warning mb-0">
-          No customer branches exist yet. <a href="admin-customers.php?action=new">Create a company</a> and add a branch,
-          because every quotation is addressed to one.
+          No customer records exist yet. <a href="admin-customers.php?action=new">Register a customer</a> —
+          a company or an individual — because every quotation is prepared for one.
         </div>
         <?php else: ?>
         <form method="post" action="admin-quotations.php" novalidate data-ajax>
@@ -750,9 +791,23 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
           <h3 class="form-section-title">Request</h3>
           <div class="row g-3">
             <div class="col-md-7">
-              <label class="form-label" for="branch_id">Customer branch <span class="req">*</span></label>
-              <select class="form-select" id="branch_id" name="branch_id" required>
-                <option value="">— select the company and branch —</option>
+              <label class="form-label" for="client_id">Customer <span class="req">*</span></label>
+              <select class="form-select" id="client_id" name="client_id" required>
+                <option value="">— select the customer —</option>
+                <?php foreach ($clients as $clientOpt):
+                    $isCompany = ($clientOpt['AccountType'] ?? 'b2b') === 'b2b';
+                ?>
+                <option value="<?= (int) $clientOpt['ClientID'] ?>" <?= (int) $formValues['ClientID'] === (int) $clientOpt['ClientID'] ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($clientOpt['CompanyName']) ?> (<?= $isCompany ? 'company' : 'individual' ?>)
+                </option>
+                <?php endforeach; ?>
+              </select>
+              <small class="text-muted">Individual customers are quoted without a branch; companies may name one of theirs.</small>
+            </div>
+            <div class="col-md-5">
+              <label class="form-label" for="branch_id">Branch <span class="text-muted fw-normal">(B2B only)</span></label>
+              <select class="form-select" id="branch_id" name="branch_id">
+                <option value="0">— no branch (individual / at counter) —</option>
                 <?php $lastCompany = null; foreach ($branches as $branch):
                     if ($lastCompany !== $branch['CompanyName']) {
                         if ($lastCompany !== null) echo '</optgroup>';
@@ -765,8 +820,9 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
                 </option>
                 <?php endforeach; ?></optgroup>
               </select>
+              <small class="text-muted">The branch must belong to the selected customer.</small>
             </div>
-            <div class="col-md-5">
+            <div class="col-md-9">
               <label class="form-label" for="quotation_date">Quotation date <span class="req">*</span></label>
               <input class="form-control" id="quotation_date" name="quotation_date" type="date"
                      value="<?= htmlspecialchars($formValues['QuotationDate']) ?>" required>
@@ -813,7 +869,7 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
           <h2 class="report-panel-title">What gets stored</h2>
         </div>
         <ul class="list-unstyled small mb-0 dash-list">
-          <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i><code>quotation</code> — branch, date, subject, total, amount in words, status</li>
+          <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i><code>quotation</code> — customer owner, branch (B2B only), date, subject, total, amount in words, status</li>
           <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i><code>quotation_item</code> — product, quantity, unit price, line total, warranty months</li>
           <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i>Warranty is copied from <code>product.DefaultWarrantyMonths</code> — the vendor's figure. It is shown on each line but cannot be edited, and a database trigger refuses any other value.</li>
           <li><i class="fa-solid fa-arrow-right me-2 text-muted"></i>The total is recomputed from the lines on every save.</li>

@@ -61,15 +61,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $pdo->beginTransaction();
 
-                // Optional linked user account for the corporate customer role.
+                // Optional linked user account. A B2B login carries no role —
+                // only SebaBD staff do; it is a customer login, whose company
+                // identity lives on the client record created next.
                 $linkUserId = null;
                 if ($createLogin) {
                     $linkUserId = next_id($pdo, 'user', 'UserID');
                     $pdo->prepare(
                         'INSERT INTO `user` (UserID, RoleID, Username, PasswordHash, Email, FullName, Phone)
-                       VALUES (:id, :role, :u, :p, :e, :f, :ph)'
+                       VALUES (:id, NULL, :u, :p, :e, :f, :ph)'
                     )->execute([
-                      ':id' => $linkUserId, ':role' => ROLE_B2B_CLIENT_ACCOUNT, ':u' => $username,
+                      ':id' => $linkUserId, ':u' => $username,
                         ':p'  => password_hash($password, PASSWORD_DEFAULT),
                         ':e'  => $email, ':f' => $contactPerson, ':ph' => $phone ?: null,
                     ]);
@@ -77,8 +79,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $clientId = next_id($pdo, 'client', 'ClientID');
                 $pdo->prepare(
-                    'INSERT INTO client (ClientID, UserID, CompanyName, ContactPerson, Email, Phone, Address)
-                     VALUES (:id, :uid, :cn, :cp, :e, :ph, :ad)'
+                    "INSERT INTO client (ClientID, UserID, CompanyName, ContactPerson, Email, Phone, Address, AccountType)
+                     VALUES (:id, :uid, :cn, :cp, :e, :ph, :ad, 'b2b')"
                 )->execute([
                     ':id' => $clientId, ':uid' => $linkUserId, ':cn' => $company,
                     ':cp' => $contactPerson, ':e' => $email,

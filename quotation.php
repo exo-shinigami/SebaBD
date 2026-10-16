@@ -17,13 +17,13 @@ $user = require_login('quotation.php');
 $no   = max(0, (int) ($_GET['no'] ?? 0));
 
 $rows = db_fetch_all(
-    'SELECT q.QuotationNo, q.BranchID, q.QuotationDate, q.Subject, q.TotalAmount,
+    'SELECT q.QuotationNo, q.BranchID, q.ClientID, q.QuotationDate, q.Subject, q.TotalAmount,
             q.AmountInWords, q.Status,
             b.BranchName, b.BranchAddress, b.ContactNo,
-            c.ClientID, c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address
+            c.ClientID AS OwnerClientID, c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address
      FROM quotation q
-     JOIN client_branch b ON b.BranchID = q.BranchID
-     JOIN client c ON c.ClientID = b.ClientID
+     LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+     LEFT JOIN client c ON c.ClientID = q.ClientID
      WHERE q.QuotationNo = :id',
     [':id' => $no]
 );
@@ -34,19 +34,15 @@ if ($quotation === null) {
 }
 
 /* -------------------------------------------------------------- access rule
- * Staff may open any quotation. A customer may open one only when it belongs
- * to a branch of the company their login is linked to — the same rule the
- * dashboard uses to decide which quotations to list. */
+ * Staff may open any quotation. A customer may open one addressed to their
+ * own company — quotation.ClientID, the customer the document was prepared
+ * for, is the ownership link (an individual's quotations carry no branch at
+ * all, so the branch was never the owner). The same rule the dashboard uses
+ * to decide which quotations to list. */
 $mayView = is_staff_user($user);
-if (!$mayView && is_client_user($user)) {
-    $mine = db_fetch_all(
-        'SELECT b.BranchID
-         FROM client c
-         JOIN client_branch b ON b.ClientID = c.ClientID
-         WHERE c.UserID = :uid',
-        [':uid' => (int) $user['UserID']]
-    );
-    $mayView = in_array((int) $quotation['BranchID'], array_map('intval', array_column($mine, 'BranchID')), true);
+if (!$mayView) {
+    $mine = customer_client($user);
+    $mayView = $mine !== null && (int) $quotation['ClientID'] === (int) $mine['ClientID'];
 }
 if (!$mayView) {
     deny_page(403, 'Not your document',

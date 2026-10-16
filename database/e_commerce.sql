@@ -63,24 +63,26 @@ CREATE TABLE `client` (
   `ContactPerson` varchar(255) DEFAULT NULL,
   `Email` varchar(255) DEFAULT NULL,
   `Phone` varchar(50) DEFAULT NULL,
-  `Address` text DEFAULT NULL
+  `Address` text DEFAULT NULL,
+  `AccountType` varchar(20) NOT NULL DEFAULT 'b2b'
+    COMMENT 'individual | b2b | house. Individuals have no branch; house = filing address (walk-in / internal)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `client`
 --
 
-INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Email`, `Phone`, `Address`) VALUES
-(1, 4, 'Meghna Infotech Ltd', 'Farhana Rahman', 'contact@meghnainfotech.com', '+880 1711 100104', 'Plot 12, Road 5, Banani, Dhaka 1213'),
-(2, NULL, 'Karnaphuli Logistics Ltd', 'Shariful Islam', 'info@karnaphulilogistics.com', '+880 1811 100105', 'Holding 45, Agrabad C/A, Chattogram 4100'),
-(3, NULL, 'Bijoy Technologies Ltd', 'Arif Hossain', 'arif@bijoytech.com', '+880 1911 100106', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215'),
-(4, NULL, 'Bright Computer Mart', 'Nazmul Hasan', 'sales@brightcomputermart.com', '+880 1611 100107', 'Shop 212, New Market, Mirpur Road, Dhaka 1205'),
--- The two system accounts below are required, not demo data: every quotation
--- and every internal order must point at a real client_branch (foreign keys on
--- quotation.BranchID, invoice.BranchID and order.BranchID). Each has UserID NULL
--- because neither one is a login — see database/migrate-internal-workflow.sql.
-(5, NULL, 'Walk-in Customers', 'Retail Customer', 'sales@sebabd.com', NULL, 'Dhaka, Bangladesh'),
-(6, NULL, 'SebaBD Internal Operations', 'SebaBD Operations Desk', 'operations@sebabd.com', '+880 1711 100100', 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh');
+INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Email`, `Phone`, `Address`, `AccountType`) VALUES
+(1, 4, 'Meghna Infotech Ltd', 'Farhana Rahman', 'contact@meghnainfotech.com', '+880 1711 100104', 'Plot 12, Road 5, Banani, Dhaka 1213', 'b2b'),
+(2, NULL, 'Karnaphuli Logistics Ltd', 'Shariful Islam', 'info@karnaphulilogistics.com', '+880 1811 100105', 'Holding 45, Agrabad C/A, Chattogram 4100', 'b2b'),
+(3, NULL, 'Bijoy Technologies Ltd', 'Arif Hossain', 'arif@bijoytech.com', '+880 1911 100106', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215', 'b2b'),
+(4, NULL, 'Bright Computer Mart', 'Nazmul Hasan', 'sales@brightcomputermart.com', '+880 1611 100107', 'Shop 212, New Market, Mirpur Road, Dhaka 1205', 'b2b'),
+-- The two house accounts below are required, not demo data: storefront
+-- quotations from visitors without a company and back-office paperwork need a
+-- real client/branch to point at (foreign keys on quotation.BranchID and
+-- quotation.ClientID). Each has UserID NULL because neither one is a login.
+(5, NULL, 'Walk-in Customers', 'Retail Customer', 'sales@sebabd.com', NULL, 'Dhaka, Bangladesh', 'house'),
+(6, NULL, 'SebaBD Internal Operations', 'SebaBD Operations Desk', 'operations@sebabd.com', '+880 1711 100100', 'House 27, Road 11, Banani, Dhaka 1213, Bangladesh', 'house');
 
 -- --------------------------------------------------------
 
@@ -118,6 +120,7 @@ INSERT INTO `client_branch` (`BranchID`, `ClientID`, `BranchName`, `BranchAddres
 CREATE TABLE `invoice` (
   `InvoiceNo` int(11) NOT NULL,
   `BranchID` int(11) DEFAULT NULL,
+  `ClientID` int(11) DEFAULT NULL COMMENT 'who owns the document — mirrors quotation.ClientID when it was converted',
   `QuotationNo` int(11) DEFAULT NULL,
   `OrderID` int(11) DEFAULT NULL,
   `InvoiceDate` date NOT NULL,
@@ -131,11 +134,11 @@ CREATE TABLE `invoice` (
 -- Dumping data for table `invoice`
 --
 
-INSERT INTO `invoice` (`InvoiceNo`, `BranchID`, `QuotationNo`, `OrderID`, `InvoiceDate`, `PaymentStatus`, `TotalAmount`, `RemainingBalance`, `AmountInWords`) VALUES
-(5001, 1, 1001, NULL, '2024-02-12', 'PARTIAL', 420000.00, 120000.00, 'Four Hundred Twenty Thousand Taka'),
-(5002, 3, 1003, NULL, '2024-02-22', 'PAID', 612000.00, 0.00, 'Six Hundred Twelve Thousand Taka'),
-(5003, 1, NULL, 1, '2024-03-01', 'DUE', 210000.00, 210000.00, 'Two Hundred Ten Thousand Taka'),
-(5004, 4, NULL, 4, '2024-03-12', 'PAID', 288000.00, 0.00, 'Two Hundred Eighty Eight Thousand Taka');
+INSERT INTO `invoice` (`InvoiceNo`, `BranchID`, `ClientID`, `QuotationNo`, `OrderID`, `InvoiceDate`, `PaymentStatus`, `TotalAmount`, `RemainingBalance`, `AmountInWords`) VALUES
+(5001, 1, 1, 1001, NULL, '2024-02-12', 'PARTIAL', 420000.00, 120000.00, 'Four Hundred Twenty Thousand Taka'),
+(5002, 3, 2, 1003, NULL, '2024-02-22', 'PAID', 612000.00, 0.00, 'Six Hundred Twelve Thousand Taka'),
+(5003, 1, 1, NULL, 1, '2024-03-01', 'DUE', 210000.00, 210000.00, 'Two Hundred Ten Thousand Taka'),
+(5004, 4, 4, NULL, 4, '2024-03-12', 'PAID', 288000.00, 0.00, 'Two Hundred Eighty Eight Thousand Taka');
 
 -- --------------------------------------------------------
 
@@ -188,9 +191,10 @@ CREATE TABLE `order` (
 -- Dumping data for table `order`
 --
 
--- Existing orders are customer orders: OrderType 'Retail', booked to no branch
--- (a retail order hangs off the user who placed it). A staff/stores order is
--- written as 'Internal' with BranchID = the SebaBD internal branch.
+-- Orders are customer orders: OrderType 'Retail', booked to no branch — a
+-- retail order hangs off the user who placed it. SebaBD staff do not order from
+-- the storefront; the historical 'Internal' OrderType only marks legacy rows,
+-- and procurement now lives in purchase_order (the vendor pipeline).
 INSERT INTO `order` (`OrderID`, `UserID`, `OrderDate`, `TotalAmount`, `OrderStatus`, `OrderType`, `BranchID`, `ShippingAddress`) VALUES
 (1, 2, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Retail', NULL, 'Plot 12, Road 5, Banani, Dhaka 1213'),
 (2, 2, '2024-03-05 14:30:00', 132000.00, 'Processing', 'Retail', NULL, 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
@@ -361,7 +365,8 @@ INSERT INTO `purchase_order` (`PONo`, `VendorID`, `PODate`, `TotalAmount`, `Term
 
 CREATE TABLE `quotation` (
   `QuotationNo` int(11) NOT NULL,
-  `BranchID` int(11) NOT NULL,
+  `BranchID` int(11) DEFAULT NULL COMMENT 'NULL for an individual customer or a house filing without an office',
+  `ClientID` int(11) DEFAULT NULL COMMENT 'who owns the document — the customer the quotation was prepared for',
   `QuotationDate` date NOT NULL,
   `Subject` varchar(255) DEFAULT NULL,
   `TotalAmount` decimal(12,2) NOT NULL,
@@ -373,11 +378,11 @@ CREATE TABLE `quotation` (
 -- Dumping data for table `quotation`
 --
 
-INSERT INTO `quotation` (`QuotationNo`, `BranchID`, `QuotationDate`, `Subject`, `TotalAmount`, `AmountInWords`, `Status`) VALUES
-(1001, 1, '2024-02-10', 'Office IT Upgrade Proposal', 420000.00, 'Four Hundred Twenty Thousand Taka', 'Accepted'),
-(1002, 2, '2024-02-15', 'Branch Expansion Equipment', 144000.00, 'One Hundred Forty Four Thousand Taka', 'Pending'),
-(1003, 3, '2024-02-20', 'Network Infrastructure Setup', 612000.00, 'Six Hundred Twelve Thousand Taka', 'Accepted'),
-(1004, 4, '2024-02-25', 'Peripherals Order', 60000.00, 'Sixty Thousand Taka', 'Rejected');
+INSERT INTO `quotation` (`QuotationNo`, `BranchID`, `ClientID`, `QuotationDate`, `Subject`, `TotalAmount`, `AmountInWords`, `Status`) VALUES
+(1001, 1, 1, '2024-02-10', 'Office IT Upgrade Proposal', 420000.00, 'Four Hundred Twenty Thousand Taka', 'Accepted'),
+(1002, 2, 1, '2024-02-15', 'Branch Expansion Equipment', 144000.00, 'One Hundred Forty Four Thousand Taka', 'Pending'),
+(1003, 3, 2, '2024-02-20', 'Network Infrastructure Setup', 612000.00, 'Six Hundred Twelve Thousand Taka', 'Accepted'),
+(1004, 4, 4, '2024-02-25', 'Peripherals Order', 60000.00, 'Sixty Thousand Taka', 'Rejected');
 
 -- --------------------------------------------------------
 
@@ -423,8 +428,6 @@ CREATE TABLE `role` (
 
 INSERT INTO `role` (`RoleID`, `RoleName`) VALUES
 (1, 'Admin'),
-(4, 'Client Account'),
-(5, 'B2B Client Account'),
 (3, 'Inventory Manager'),
 (2, 'Sales Manager');
 
@@ -436,7 +439,7 @@ INSERT INTO `role` (`RoleID`, `RoleName`) VALUES
 
 CREATE TABLE `user` (
   `UserID` int(11) NOT NULL,
-  `RoleID` int(11) NOT NULL,
+  `RoleID` int(11) DEFAULT NULL COMMENT 'NULL for customer logins — only SebaBD staff hold a role',
   `Username` varchar(100) NOT NULL,
   `PasswordHash` varchar(255) NOT NULL,
   `Email` varchar(255) NOT NULL,
@@ -456,7 +459,7 @@ INSERT INTO `user` (`UserID`, `RoleID`, `Username`, `PasswordHash`, `Email`, `Fu
 (1, 1, 'admin', '$2y$10$sg9qJdZ9Z48VVpM45KJIuOVW.LzNERCltRXHbTPsl/wSpFtIBSD16', 'mahmudul.hasan@sebabd.com', 'Mahmudul Hasan', '+880 1711 100101', 1, '2026-09-25 12:37:17'),
 (2, 2, 'sales', '$2y$10$ngPNRoDB.3UT5gHmj4XJtuOfSFvrhCYFanBJNle2gqCuC7eN9Y/l.', 'nusrat.jahan@sebabd.com', 'Nusrat Jahan', '+880 1811 100102', 1, '2026-09-25 12:37:17'),
 (3, 3, 'inventory', '$2y$10$Ia.o8s6YeAmeFh1yNGSbhe7XNnU2q1ZXOmK.CrjUNcJCA0L6EFrzq', 'tanvir.ahmed@sebabd.com', 'Tanvir Ahmed', '+880 1911 100103', 1, '2026-09-25 12:37:17'),
-(4, 5, 'client', '$2y$10$wsOwK/s2pfikbrjdlSz/P.ECSf/9q4VCeBLIOo8O9g.3ttgzKIf0y', 'contact@meghnainfotech.com', 'Farhana Rahman', '+880 1711 100104', 1, '2026-09-25 12:37:17');
+(4, NULL, 'client', '$2y$10$wsOwK/s2pfikbrjdlSz/P.ECSf/9q4VCeBLIOo8O9g.3ttgzKIf0y', 'contact@meghnainfotech.com', 'Farhana Rahman', '+880 1711 100104', 1, '2026-09-25 12:37:17');
 
 -- --------------------------------------------------------
 
@@ -512,7 +515,8 @@ ALTER TABLE `invoice`
   ADD PRIMARY KEY (`InvoiceNo`),
   ADD UNIQUE KEY `QuotationNo` (`QuotationNo`),
   ADD UNIQUE KEY `OrderID` (`OrderID`),
-  ADD KEY `BranchID` (`BranchID`);
+  ADD KEY `BranchID` (`BranchID`),
+  ADD KEY `ClientID` (`ClientID`);
 
 --
 -- Indexes for table `invoice_item`
@@ -582,7 +586,8 @@ ALTER TABLE `purchase_order`
 --
 ALTER TABLE `quotation`
   ADD PRIMARY KEY (`QuotationNo`),
-  ADD KEY `BranchID` (`BranchID`);
+  ADD KEY `BranchID` (`BranchID`),
+  ADD KEY `ClientID` (`ClientID`);
 
 --
 -- Indexes for table `quotation_item`
@@ -636,7 +641,8 @@ ALTER TABLE `client_branch`
 ALTER TABLE `invoice`
   ADD CONSTRAINT `invoice_ibfk_1` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`),
   ADD CONSTRAINT `invoice_ibfk_2` FOREIGN KEY (`QuotationNo`) REFERENCES `quotation` (`QuotationNo`),
-  ADD CONSTRAINT `invoice_ibfk_3` FOREIGN KEY (`OrderID`) REFERENCES `order` (`OrderID`);
+  ADD CONSTRAINT `invoice_ibfk_3` FOREIGN KEY (`OrderID`) REFERENCES `order` (`OrderID`),
+  ADD CONSTRAINT `invoice_ibfk_4` FOREIGN KEY (`ClientID`) REFERENCES `client` (`ClientID`);
 
 --
 -- Constraints for table `invoice_item`
@@ -696,7 +702,8 @@ ALTER TABLE `purchase_order`
 -- Constraints for table `quotation`
 --
 ALTER TABLE `quotation`
-  ADD CONSTRAINT `quotation_ibfk_1` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`);
+  ADD CONSTRAINT `quotation_ibfk_1` FOREIGN KEY (`BranchID`) REFERENCES `client_branch` (`BranchID`),
+  ADD CONSTRAINT `quotation_ibfk_2` FOREIGN KEY (`ClientID`) REFERENCES `client` (`ClientID`);
 
 --
 -- Constraints for table `quotation_item`

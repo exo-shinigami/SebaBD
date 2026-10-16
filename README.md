@@ -75,7 +75,18 @@ whose warranty differs from its product, and installs the warranty trigger:
 C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-internal-workflow.sql
 ```
 
-Both migration files are guarded, so running one twice is harmless. A database imported from
+Finally, if it was created under the **old customer model** — where customer logins held the
+`Client Account` or `B2B Client Account` roles — run the customer-model migration once. It
+makes `user.RoleID` nullable (only SebaBD staff hold roles now), retires those two roles, adds
+`client.AccountType` (`individual` | `b2b` | `house`), gives every customer login a client
+record of their own, and adds/backfills `quotation.ClientID` and `invoice.ClientID`, which are
+how a document is tied to its owner:
+
+```powershell
+C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-customer-model.sql
+```
+
+All migration files are guarded, so running one twice is harmless. A database imported from
 the current `database/e_commerce.sql` already contains all of this and needs neither.
 
 ### 3. Check the connection settings
@@ -123,29 +134,40 @@ The dump creates four working accounts — no separate password import is needed
 | `admin` | `admin123` | Admin | Staff dashboard (revenue, receivables, stock alerts) and every report |
 | `sales` | `sales123` | Sales Manager | Sales, invoice and quotation reports |
 | `inventory` | `stock123` | Inventory Manager | Procurement and stock reports |
-| `client` | `client123` | B2B Client Account | Company dashboard: Meghna Infotech's branches, quotations, invoices and receipts |
+| `client` | `client123` | *(no role — customer)* | Company dashboard: Meghna Infotech's branches, quotations, invoices and receipts |
 
-Accounts created through `register.php` become `Client Account` (role 4); accounts created
-through `b2b-registration.php` become `B2B Client Account` (role 5). Staff roles can only be
-assigned by an administrator — public registration never grants them.
+Roles belong to SebaBD staff only. A customer login — an individual registered through
+`register.php` or a B2B contact registered through `b2b-registration.php` — carries
+`RoleID = NULL` and no staff privileges. Staff roles can only be assigned by an administrator
+in `admin-users.php`; public registration never grants them. Staff accounts also cannot order
+from the storefront or request quotations — those are customer actions, refused server-side
+(`refuse_staff_order()` in `helpers.php`), not merely hidden in the UI.
 
 ### Walk-in, customer and internal work
 
-Every quotation and every order is filed somewhere, and the application decides where from
-who is acting — never from what the form posted. Three paths share the same two forms:
+Every quotation is filed to an owner and, where one exists, a branch, and the application
+decides that from who is acting — never from what the form posted. Three paths share the
+same form:
 
-| Who is acting | Quotation (`quotation.BranchID`) | Order (`order.OrderType` / `order.BranchID`) |
-| --- | --- | --- |
-| A visitor with no company account | the **Walk-in Customers** house account (`Dhaka Sales Counter`) | — (orders need a login) |
-| A signed-in customer | one of their own company's branches | `Retail`, `BranchID` `NULL` — the order hangs off the account |
-| A signed-in staff member (Admin / Sales / Inventory) | the **SebaBD Internal Operations** house account (`SebaBD Head Office — Internal`) | `Internal`, `BranchID` = that same branch |
+| Who is acting | Quotation owner (`quotation.ClientID`) | Quotation branch (`quotation.BranchID`) | Order |
+| --- | --- | --- | --- |
+| A visitor with no account | the **Walk-in Customers** house account | `Dhaka Sales Counter` | — (orders need a login) |
+| A signed-in **individual** customer | their own `client` record (`AccountType = 'individual'`) | `NULL` — individuals have no branch | `Retail`, `BranchID` `NULL` — the order hangs off the account |
+| A signed-in **B2B** contact | their company's `client` record (`AccountType = 'b2b'`) | one of that company's branches | `Retail`, `BranchID` `NULL` |
+| A signed-in staff member | — staff do not order or request quotations (`refuse_staff_order()`) | — | `Internal` rows exist only as history |
 
-Both house accounts are ordinary `client` rows with no login (`client.UserID` is `NULL`), and
-they always exist, so `quotation.BranchID`, `invoice.BranchID` and `order.BranchID` can never
-fail their foreign key. They are seeded by the migration, and `walkin_branch_id()` /
-`internal_branch_id()` in `helpers.php` create them on demand inside the same transaction if a
-row is ever missing. The back office labels them: quotations and orders show an **Internal**
-or **Walk-in** badge, and `admin-orders.php` can filter on `?channel=Internal`.
+The two house accounts are ordinary `client` rows with no login (`client.UserID` is `NULL`,
+`AccountType = 'house'`), and they always exist, so the house branch foreign keys can never
+fail. They are seeded by the migration, and `walkin_branch_id()` in `helpers.php` creates the
+walk-in rows on demand inside the same transaction if a row is ever missing. The internal
+house account is legacy — nothing files under it any more, but the rows stay because old
+`Internal` orders and quotations point at them. The back office labels house-origin paperwork
+with an **Internal** or **Walk-in** badge, and `admin-orders.php` can filter on
+`?channel=Internal`.
+
+A customer sees exactly the quotations and invoices owned by their own client record
+(`quotation.ClientID` / `invoice.ClientID`), which is what makes an individual's branchless
+paperwork private to them.
 
 Two more rules the application and the database agree on:
 
@@ -529,7 +551,7 @@ word `order`, so every query uses `` `order` ``.)
 | `OrderDate` | `datetime` | | Defaults to `CURRENT_TIMESTAMP` |
 | `TotalAmount` | `decimal(12,2)` | | Header total; equals the sum of its `order_item` rows |
 | `OrderStatus` | `varchar(50)` | | Defaults to `Pending`; also `Processing`, `Completed`, `Cancelled` |
-| `OrderType` | `varchar(20)` | | Defaults to `Retail`. `Internal` = SebaBD ordering for itself (placed by a staff account), so the two pipelines stay apart |
+| `OrderType` | `varchar(20)` | | Defaults to `Retail`. Staff accounts no longer order from the storefront, so the legacy `Internal` value only marks historical rows booked to SebaBD's own branch |
 | `BranchID` | `int` | FK → `client_branch` | `ON DELETE SET NULL`. `NULL` for a retail order (it hangs off the user); the internal house branch for an internal order |
 | `ShippingAddress` | `text` | | Typed by the customer at checkout |
 
@@ -851,7 +873,7 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 | --- | --- |
 | `config.php` | Database credentials, site name, currency settings |
 | `db.php` | One shared PDO connection (`db()`) and `db_fetch_all()` |
-| `helpers.php` | Sessions, `current_user()`, `require_login()`, `staff_roles()`/`is_staff_user()`/`require_staff()`, `client_roles()`/`is_client_user()`, partial rendering, flash messages, JSON helpers, validation, old-input helpers, `next_id()`, `money()`, `amount_in_words()` |
+| `helpers.php` | Sessions, `current_user()`, `require_login()`, `staff_roles()`/`is_staff_user()`/`require_staff()`, `is_customer_user()`/`customer_client()`/`is_b2b_customer()`, `refuse_staff_order()`, partial rendering, flash messages, JSON helpers, validation, old-input helpers, `next_id()`, `money()`, `amount_in_words()` |
 | `catalog-data.php` | Presentation metadata for products, category icons, catalog queries (`get_featured_products`, `search_products`, `get_product`, `related_products`, `product_units`, `stock_counts`, `stock_label`) |
 | `cart-data.php` | The session basket: add/update/remove, line assembly with live stock state, totals, and `cart_return_path()` — the guard that keeps a posted "return to" path inside this site |
 | `admin-bootstrap.php` | Back-office catalogue + permissions (`back_office_modules()`, `require_module()`), shared page builders, and the module switcher |

@@ -1,18 +1,19 @@
 <?php
 /**
- * SebaBD — account dashboard (role aware).
+ * SebaBD — account dashboard (audience aware).
  *
  * One page, two audiences:
  *
- *   staff  (Admin / Sales Manager / Inventory Manager)
+ *   staff  (a user holding a role: Admin / Sales Manager / Inventory Manager)
  *          the store at a glance — revenue, open orders and quotations,
  *          receivables, stock alerts and best-selling products, plus links
  *          into the KoolReport module.
  *
- *   client (Client Account / B2B Client Account)
- *          their own records: orders placed with their user account,
- *          quotations and invoices linked through their company branches,
- *          and the company/branch details stored against their login.
+ *   customer (no role on the login — an individual or a B2B contact)
+ *          their own records: orders placed with their user account, and the
+ *          quotations and invoices owned by their client row — a company for
+ *          a B2B login, a personal record for an individual. Branch details
+ *          appear only for B2B; individuals have none.
  *
  * Every figure comes from the store's own records; the page does not load
  * KoolReport, so it stays fast.
@@ -112,8 +113,8 @@ if ($isStaff && $dbUp) {
         'SELECT i.InvoiceNo, i.InvoiceDate, i.PaymentStatus, i.TotalAmount, i.RemainingBalance,
                 b.BranchName, c.CompanyName
          FROM invoice i
-         JOIN client_branch b ON b.BranchID = i.BranchID
-         JOIN client        c ON c.ClientID = b.ClientID
+         LEFT JOIN client_branch b ON b.BranchID = i.BranchID
+         LEFT JOIN client        c ON c.ClientID = i.ClientID
          WHERE i.RemainingBalance > 0
          ORDER BY i.RemainingBalance DESC, i.InvoiceNo
          LIMIT 6'
@@ -123,8 +124,8 @@ if ($isStaff && $dbUp) {
         'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status,
                 b.BranchName, c.CompanyName
          FROM quotation q
-         JOIN client_branch b ON b.BranchID = q.BranchID
-         JOIN client        c ON c.ClientID  = b.ClientID
+         LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+         LEFT JOIN client        c ON c.ClientID  = q.ClientID
          ORDER BY q.QuotationDate DESC, q.QuotationNo DESC
          LIMIT 5'
     );
@@ -195,11 +196,15 @@ if (!$isStaff && $dbUp) {
     );
 
     if ($client) {
+        // Ownership is quotation.ClientID / invoice.ClientID — the customer
+        // the document was prepared for. The branch is optional display
+        // detail that only B2B documents carry; an individual's papers have
+        // no branch, and they would disappear from a branch-joined query.
         $myQuotes = db_fetch_all(
             'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status, b.BranchName
              FROM quotation q
-             JOIN client_branch b ON b.BranchID = q.BranchID
-             WHERE b.ClientID = :cid
+             LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+             WHERE q.ClientID = :cid
              ORDER BY q.QuotationDate DESC, q.QuotationNo DESC',
             [':cid' => (int) $client['ClientID']]
         );
@@ -208,8 +213,8 @@ if (!$isStaff && $dbUp) {
             'SELECT i.InvoiceNo, i.InvoiceDate, i.PaymentStatus, i.TotalAmount, i.RemainingBalance, b.BranchName,
                     (SELECT COUNT(*) FROM payment_receipt pr WHERE pr.InvoiceNo = i.InvoiceNo) AS Receipts
              FROM invoice i
-             JOIN client_branch b ON b.BranchID = i.BranchID
-             WHERE b.ClientID = :cid
+             LEFT JOIN client_branch b ON b.BranchID = i.BranchID
+             WHERE i.ClientID = :cid
              ORDER BY i.InvoiceDate DESC, i.InvoiceNo DESC',
             [':cid' => (int) $client['ClientID']]
         );
@@ -230,7 +235,14 @@ if (!$isStaff && $dbUp) {
         ['icon' => 'fa-solid fa-receipt', 'label' => 'My orders', 'value' => number_format(count($myOrders)), 'hint' => 'Placed with your login'],
         ['icon' => 'fa-solid fa-file-signature', 'label' => 'Open quotations', 'value' => number_format($openQuotes), 'hint' => count($myQuotes) . ' total on file'],
         ['icon' => 'fa-solid fa-hand-holding-dollar', 'label' => 'Balance due', 'value' => money($due), 'hint' => count($myInvoices) . ' invoice(s)'],
-        ['icon' => 'fa-solid fa-building', 'label' => 'Company branches', 'value' => $client ? number_format(count($branches)) : '—', 'hint' => $client ? (string) $client['CompanyName'] : 'Retail account'],
+        [
+            'icon' => 'fa-solid fa-building',
+            'label' => 'Company branches',
+            'value' => ($client && count($branches)) ? number_format(count($branches)) : '—',
+            'hint'  => ($client && ($client['AccountType'] ?? '') !== 'b2b')
+                ? 'Personal account — no branches'
+                : ($client ? (string) $client['CompanyName'] : 'Retail account'),
+        ],
     ];
 }
 ?>
@@ -385,7 +397,10 @@ if (!$isStaff && $dbUp) {
               <?php foreach ($receivables as $row): ?>
               <tr>
                 <td>#<?= (int) $row['InvoiceNo'] ?></td>
-                <td><?= htmlspecialchars($row['CompanyName']) ?><br><small class="text-muted"><?= htmlspecialchars($row['BranchName']) ?></small></td>
+                <td>
+                  <?= htmlspecialchars((string) $row['CompanyName']) ?>
+                  <br><small class="text-muted"><?= !empty($row['BranchName']) ? htmlspecialchars($row['BranchName']) : 'individual — no branch' ?></small>
+                </td>
                 <td><?= htmlspecialchars(date('d M Y', strtotime((string) $row['InvoiceDate']))) ?></td>
                 <td><?= money($row['TotalAmount']) ?></td>
                 <td class="fw-semibold"><?= money($row['RemainingBalance']) ?></td>
@@ -413,8 +428,11 @@ if (!$isStaff && $dbUp) {
               <?php foreach ($latestQuotes as $row): ?>
               <tr>
                 <td><?= (int) $row['QuotationNo'] ?></td>
-                <td><?= htmlspecialchars((string) $row['Subject']) ?><br><small class="text-muted"><?= htmlspecialchars($row['BranchName']) ?></small></td>
-                <td><?= htmlspecialchars($row['CompanyName']) ?></td>
+                <td>
+                  <?= htmlspecialchars((string) $row['Subject']) ?>
+                  <br><small class="text-muted"><?= !empty($row['BranchName']) ? htmlspecialchars($row['BranchName']) : 'individual — no branch' ?></small>
+                </td>
+                <td><?= htmlspecialchars((string) $row['CompanyName']) ?></td>
                 <td><?= htmlspecialchars(date('d M Y', strtotime((string) $row['QuotationDate']))) ?></td>
                 <td><?= money($row['TotalAmount']) ?></td>
                 <td><span class="report-badge <?= dash_badge((string) $row['Status']) ?>"><?= htmlspecialchars($row['Status']) ?></span></td>
@@ -517,7 +535,7 @@ if (!$isStaff && $dbUp) {
           <dt class="col-sm-4">Username</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($profile['Username'] ?? $user['Username'])) ?></dd>
           <dt class="col-sm-4">Email</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($profile['Email'] ?? $user['Email'])) ?></dd>
           <dt class="col-sm-4">Phone</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($profile['Phone'] ?? '—')) ?></dd>
-          <dt class="col-sm-4">Role</dt><dd class="col-sm-8"><?= htmlspecialchars($user['RoleName']) ?></dd>
+          <dt class="col-sm-4">Type</dt><dd class="col-sm-8"><?= $user['RoleID'] !== null ? 'SebaBD staff — ' . htmlspecialchars((string) $user['RoleName']) : 'Customer' ?></dd>
           <dt class="col-sm-4">Member since</dt><dd class="col-sm-8"><?= htmlspecialchars((string) (isset($profile['CreatedAt']) ? date('d M Y', strtotime((string) $profile['CreatedAt'])) : '—')) ?></dd>
           <?php if ($client): ?>
           <dt class="col-sm-4">Company</dt><dd class="col-sm-8"><?= htmlspecialchars($client['CompanyName']) ?></dd>
@@ -550,7 +568,7 @@ if (!$isStaff && $dbUp) {
           <p class="report-panel-sub">Quotation requests we have prepared for your company.</p>
         </div>
         <?php if (!$myQuotes): ?>
-        <p class="text-muted mb-3"><?= $client ? 'No quotations have been issued to your company yet.' : 'Quotations are linked to a company record — ask us to link your account, or request a quotation as a retail customer.' ?></p>
+        <p class="text-muted mb-3"><?= $client ? 'No quotations have been prepared for you yet.' : 'Quotations are linked to your customer record — request one and a sales manager will price it.' ?></p>
         <a class="btn btn-outline-dark btn-sm" href="quotation-request.php">Request a quotation</a>
         <?php else: ?>
         <div class="table-responsive">
@@ -561,7 +579,7 @@ if (!$isStaff && $dbUp) {
               <tr>
                 <td><?= (int) $row['QuotationNo'] ?></td>
                 <td><?= htmlspecialchars((string) $row['Subject']) ?></td>
-                <td><?= htmlspecialchars($row['BranchName']) ?></td>
+                <td><?= htmlspecialchars((string) ($row['BranchName'] ?? '—')) ?></td>
                 <td><?= htmlspecialchars(date('d M Y', strtotime((string) $row['QuotationDate']))) ?></td>
                 <td><?= money($row['TotalAmount']) ?></td>
                 <td><span class="report-badge <?= dash_badge((string) $row['Status']) ?>"><?= htmlspecialchars($row['Status']) ?></span></td>
@@ -590,7 +608,7 @@ if (!$isStaff && $dbUp) {
               <span class="fw-semibold">Invoice #<?= (int) $row['InvoiceNo'] ?></span>
               <small class="text-muted d-block">
                 <?= htmlspecialchars(date('d M Y', strtotime((string) $row['InvoiceDate']))) ?>
-                · <?= htmlspecialchars($row['BranchName']) ?>
+                <?= !empty($row['BranchName']) ? ' · ' . htmlspecialchars($row['BranchName']) : '' ?>
                 · <?= (int) $row['Receipts'] ?> receipt(s)
               </small>
               <small class="text-muted d-block">Total <?= money($row['TotalAmount']) ?> · balance <?= money($row['RemainingBalance']) ?></small>

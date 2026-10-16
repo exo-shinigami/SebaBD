@@ -14,7 +14,12 @@ $product   = $product ?? [];
 $available = (int) ($available ?? 0);
 $productId = (int) ($product['ProductID'] ?? 0);
 $productUrl = 'product.php?id=' . $productId;
-$orderUrl   = 'order.php?product=' . $productId . '&qty=1';
+
+// Buying is a customer action: a signed-in staff member browsing the catalog
+// sees the card without the purchase controls (the write paths refuse them
+// too — this is presentation only).
+$canBuy    = !is_staff_user();
+$orderUrl   = $canBuy ? 'order.php?product=' . $productId . '&qty=1' : '';
 
 // Adding from the grid should put the shopper back on the same selection,
 // search term and all, so the card posts the page it is standing on.
@@ -40,10 +45,13 @@ $returnUrl = cart_return_path($_SERVER['REQUEST_URI'] ?? 'index.php', 'index.php
         <div>
           <span class="price"><?= money($product['StandardPrice']) ?><?php if (!empty($product['sale'])): ?> <del class="text-muted fw-normal"><?= money($product['sale']) ?></del><?php endif; ?></span>
           <small class="stock-line text-muted d-block"><?= htmlspecialchars(stock_label($product, $available)) ?></small>
+          <?php if ($canBuy): ?>
           <small class="d-block"><a class="text-decoration-none small" href="<?= $orderUrl ?>">Quick order form</a></small>
+          <?php endif; ?>
         </div>
         <div class="d-flex gap-1 flex-shrink-0">
           <a href="<?= $productUrl ?>" class="btn btn-sm btn-outline-dark" aria-label="View details for <?= htmlspecialchars($product['ProductName']) ?>"><i class="fa-solid fa-eye"></i></a>
+          <?php if ($canBuy): ?>
           <form class="d-inline" method="post" action="cart.php" data-ajax>
             <?= csrf_field() ?>
             <input type="hidden" name="intent" value="add">
@@ -55,6 +63,7 @@ $returnUrl = cart_return_path($_SERVER['REQUEST_URI'] ?? 'index.php', 'index.php
               <i class="fa-solid fa-cart-plus"></i><span class="d-none d-xl-inline ms-1">Add</span>
             </button>
           </form>
+          <?php endif; ?>
         </div>
       </div>
     </div>

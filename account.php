@@ -22,9 +22,9 @@ $errors = [];
 $done   = '';
 
 $rows = db_fetch_all(
-    "SELECT u.UserID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt, r.RoleName
+    "SELECT u.UserID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt, u.RoleID, r.RoleName
      FROM `user` u
-     JOIN `role` r ON r.RoleID = u.RoleID
+     LEFT JOIN `role` r ON r.RoleID = u.RoleID
      WHERE u.UserID = :id",
     [':id' => (int) $user['UserID']]
 );
@@ -149,8 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Re-read so the page always shows what is stored.
     $rows = db_fetch_all(
-        "SELECT u.UserID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt, r.RoleName
-         FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID WHERE u.UserID = :id",
+        "SELECT u.UserID, u.Username, u.Email, u.FullName, u.Phone, u.CreatedAt, u.RoleID, r.RoleName
+         FROM `user` u LEFT JOIN `role` r ON r.RoleID = u.RoleID WHERE u.UserID = :id",
         [':id' => (int) $me['UserID']]
     );
     $me = $rows[0] ?? $me;
@@ -160,14 +160,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $company  = null;
 $branches = [];
-if (is_client_user($me ?: $user)) {
-    $companyRows = db_fetch_all(
-        'SELECT ClientID, CompanyName, ContactPerson, Email, Phone, Address
-         FROM client WHERE UserID = :uid LIMIT 1',
-        [':uid' => (int) $me['UserID']]
-    );
-    $company = $companyRows[0] ?? null;
-    if ($company) {
+$isB2B    = false;
+// The client row linked to this login: a company for a B2B contact, a personal
+// record for an individual. Staff logins have none.
+$company = customer_client($me ?: $user);
+if ($company) {
+    $isB2B = ($company['AccountType'] ?? '') === 'b2b';
+    if ($isB2B) {
+        // Branches are a company-only concept — an individual customer has no
+        // branch, and the branch panel is simply absent for them.
         $branches = db_fetch_all(
             'SELECT BranchID, BranchName, BranchAddress, ContactNo
              FROM client_branch WHERE ClientID = :cid ORDER BY BranchID',
@@ -187,19 +188,22 @@ $orders = db_fetch_all(
 $quotes = [];
 $invoices = [];
 if ($company) {
+    // Owned by the customer's client row (quotation.ClientID /
+    // invoice.ClientID). The branch name is optional display detail — only
+    // B2B documents have one.
     $quotes = db_fetch_all(
         'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status, b.BranchName
          FROM quotation q
-         JOIN client_branch b ON b.BranchID = q.BranchID
-         WHERE b.ClientID = :cid
+         LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+         WHERE q.ClientID = :cid
          ORDER BY q.QuotationDate DESC, q.QuotationNo DESC LIMIT 5',
         [':cid' => (int) $company['ClientID']]
     );
     $invoices = db_fetch_all(
         'SELECT i.InvoiceNo, i.InvoiceDate, i.PaymentStatus, i.TotalAmount, i.RemainingBalance, b.BranchName
          FROM invoice i
-         JOIN client_branch b ON b.BranchID = i.BranchID
-         WHERE b.ClientID = :cid
+         LEFT JOIN client_branch b ON b.BranchID = i.BranchID
+         WHERE i.ClientID = :cid
          ORDER BY i.InvoiceDate DESC, i.InvoiceNo DESC LIMIT 5',
         [':cid' => (int) $company['ClientID']]
     );
@@ -227,7 +231,7 @@ $page_title = 'My account';
         <p class="section-label mb-1">Account</p>
         <h1 class="h3 fw-bold mb-1"><?= htmlspecialchars($me['FullName']) ?></h1>
         <p class="text-muted mb-0">
-          <span class="report-badge report-badge-info"><?= htmlspecialchars($me['RoleName']) ?></span>
+          <span class="report-badge report-badge-info"><?= $me['RoleID'] !== null ? 'SebaBD staff — ' . htmlspecialchars((string) $me['RoleName']) : 'Customer' ?></span>
           Signed in as <strong><?= htmlspecialchars($me['Username']) ?></strong>
           · member since <?= htmlspecialchars(format_date($me['CreatedAt'])) ?>
         </p>

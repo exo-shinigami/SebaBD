@@ -17,8 +17,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-const ROLE_CLIENT_ACCOUNT = 4;
-const ROLE_B2B_CLIENT_ACCOUNT = 5;
+// Customer logins (individual or B2B) carry no role at all — user.RoleID is
+// NULL for them. The old ROLE_CLIENT_ACCOUNT / ROLE_B2B_CLIENT_ACCOUNT
+// constants are gone: what kind of customer someone is lives on their `client`
+// row (client.AccountType), not on their login.
 
 /* ------------------------------------------------------------------ auth */
 
@@ -30,9 +32,11 @@ function current_user(): ?array
     static $user = null;
     static $loaded = false;
     if (!$loaded) {
+        // LEFT JOIN, not JOIN: a customer login (individual or B2B) carries no
+        // role at all, and RoleName simply comes back NULL for them.
         $rows = db_fetch_all(
-            'SELECT u.UserID, u.Username, u.FullName, u.Email, r.RoleName
-             FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+            'SELECT u.UserID, u.Username, u.FullName, u.Email, u.RoleID, r.RoleName
+             FROM `user` u LEFT JOIN `role` r ON r.RoleID = u.RoleID
              WHERE u.UserID = :id',
             [':id' => (int) $_SESSION['user_id']]
         );
@@ -69,6 +73,56 @@ function require_login(string $redirectBack = ''): array
     return $user;
 }
 
+/* ---------------------------------------------------------- customer accounts */
+
+/**
+ * A customer is a signed-in user who holds no staff role — which is every
+ * storefront login: the individual registered through register.php and the
+ * B2B contact registered through b2b-registration.php alike. The distinction
+ * between the two lives on the linked `client` row (client.AccountType), not
+ * here.
+ */
+function is_customer_user(?array $user = null): bool
+{
+    $user = $user ?? current_user();
+
+    return $user !== null && empty($user['RoleID']);
+}
+
+/**
+ * The client row a customer's login is linked to (client.UserID is the 1:1),
+ * with its account type. Staff logins have no client row; neither do visitors.
+ *
+ * @return array|null {ClientID, CompanyName, ContactPerson, Email, Phone, Address, AccountType}
+ */
+function customer_client(?array $user = null): ?array
+{
+    $user = $user ?? current_user();
+    if (!$user || is_staff_user($user)) {
+        return null;
+    }
+
+    $rows = db_fetch_all(
+        'SELECT ClientID, CompanyName, ContactPerson, Email, Phone, Address, AccountType
+         FROM client WHERE UserID = :uid LIMIT 1',
+        [':uid' => (int) $user['UserID']]
+    );
+
+    return $rows[0] ?? null;
+}
+
+/**
+ * Is this signed-in customer a registered company (B2B) rather than an
+ * individual? Individuals have no branches, so anything branch-related keys
+ * off this.
+ */
+function is_b2b_customer(?array $user = null): bool
+{
+    $client = customer_client($user);
+
+    return $client !== null && ($client['AccountType'] ?? '') === 'b2b';
+}
+
 /* ---------------------------------------------------------- staff roles */
 
 /**
@@ -87,21 +141,7 @@ function is_staff_user(?array $user = null): bool
     return $user !== null && in_array($user['RoleName'] ?? '', staff_roles(), true);
 }
 
-/**
- * SebaBD customer roles — accounts that belong to the storefront rather than
- * the staff/reporting side.
- */
-function client_roles(): array
-{
-    return ['Client Account', 'B2B Client Account'];
-}
 
-function is_client_user(?array $user = null): bool
-{
-    $user = $user ?? current_user();
-
-    return $user !== null && in_array($user['RoleName'] ?? '', client_roles(), true);
-}
 
 /**
  * Gate for the reports area: the visitor must be signed in *and* be staff.
@@ -826,18 +866,19 @@ function walkin_branch_id(PDO $pdo, array $clientOverrides = []): int
     return system_branch_id($pdo, 'walkin', $clientOverrides);
 }
 
-/** The branch internal (staff) orders and requests are booked to. */
-function internal_branch_id(PDO $pdo): int
-{
-    return system_branch_id($pdo, 'internal');
-}
+// The internal house branch (SebaBD Internal Operations) is legacy: staff no
+// longer order or request quotations from the storefront (refuse_staff_order()),
+// so nothing files under it any more. The rows stay seeded and readable because
+// historical 'Internal' orders and quotations point at them.
 
 /**
  * BranchID => which house account is filed there: 'internal' or 'walkin'.
  *
- * One query for a whole page, so a list can label the rows whose branch is a
- * house account (an internal procurement order, a walk-in quotation) without
- * a lookup per row. Returns [] when there are no house branches yet.
+ * Resolved from the data (client.AccountType = 'house'), not from hard-coded
+ * names, so a house account can be renamed in config or in the database
+ * without breaking the badges. One query for a whole page, so a list can label
+ * the rows whose branch is a house account (a walk-in quotation) without a
+ * lookup per row. Returns [] when there are no house branches yet.
  *
  * @return array<int,string>
  */
@@ -848,21 +889,29 @@ function system_branch_ids(): array
         $byBranchName[$account['branch']] = $key;
     }
 
-    $placeholders = [];
-    $params       = [];
-    foreach (array_keys($byBranchName) as $index => $name) {
-        $placeholders[]        = ':n' . $index;
-        $params[':n' . $index] = $name;
-    }
-    if (!$placeholders) {
-        return [];
-    }
-
+    // House client rows carry AccountType = 'house' (migration 12). Fall back
+    // to the configured names on a database that has not been migrated yet.
     $rows = db_fetch_all(
-        'SELECT BranchID, BranchName FROM client_branch
-         WHERE BranchName IN (' . implode(', ', $placeholders) . ')',
-        $params
+        "SELECT b.BranchID, b.BranchName FROM client_branch b
+         JOIN client c ON c.ClientID = b.ClientID
+         WHERE c.AccountType = 'house'"
     );
+    if (!$rows) {
+        $placeholders = [];
+        $params       = [];
+        foreach (array_keys($byBranchName) as $index => $name) {
+            $placeholders[]        = ':n' . $index;
+            $params[':n' . $index] = $name;
+        }
+        if (!$placeholders) {
+            return [];
+        }
+        $rows = db_fetch_all(
+            'SELECT BranchID, BranchName FROM client_branch
+             WHERE BranchName IN (' . implode(', ', $placeholders) . ')',
+            $params
+        );
+    }
 
     $out = [];
     foreach ($rows as $row) {
@@ -879,22 +928,30 @@ const ORDER_TYPE_RETAIL = 'Retail';
 const ORDER_TYPE_INTERNAL = 'Internal';
 
 /**
- * Which pipeline does work started by this account belong to?
+ * SebaBD staff do not order from the storefront or request quotations — those
+ * are customer actions only. The internal pipeline (ORDER_TYPE_INTERNAL, the
+ * internal house branch, order_type_for()) is retired: existing 'Internal'
+ * rows in the order table remain readable in the back office as history, but
+ * no new one can ever be written, because every entry point calls this first.
  *
- * Staff (Admin, Sales Manager, Inventory Manager) ordering from the storefront
- * are buying for SebaBD, not for a customer, so their orders and quotation
- * requests are filed under the internal house account instead of a client
- * record. This one function is the rule every entry point reads.
+ * Stops the request with a 403 when the visitor is signed-in staff; returns
+ * silently otherwise. Call it at the top of every customer ordering flow.
  */
-function order_type_for(?array $user): string
+function refuse_staff_order(?array $user = null): void
 {
-    return is_staff_user($user) ? ORDER_TYPE_INTERNAL : ORDER_TYPE_RETAIL;
-}
+    $user = $user ?? current_user();
+    if (!is_staff_user($user)) {
+        return;
+    }
 
-/** The branch an order of this channel is booked to, or null for retail. */
-function order_branch_id(PDO $pdo, string $orderType): ?int
-{
-    return $orderType === ORDER_TYPE_INTERNAL ? internal_branch_id($pdo) : null;
+    deny_page(
+        403,
+        'Staff accounts do not order from the storefront',
+        'Ordering and quotation requests are customer actions. Your staff account '
+        . '(' . htmlspecialchars((string) ($user['RoleName'] ?? 'staff')) . ') manages orders, stock and '
+        . 'procurement from the back office instead — nothing a signed-in staff member '
+        . 'buys belongs in the customer sales pipeline.'
+    );
 }
 
 /* -------------------------------------------------------- product facts */

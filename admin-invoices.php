@@ -31,6 +31,9 @@ $errors = [];
 $filterStatus = trim((string) ($_GET['status'] ?? ''));
 $filterClient = max(0, (int) ($_GET['client'] ?? 0));
 $filterBranch = max(0, (int) ($_GET['branch'] ?? 0));
+// Customer records for the filter dropdown — companies and individuals,
+// house accounts excluded.
+$clientsForFilter = [];
 $search       = trim((string) ($_GET['q'] ?? ''));
 
 /** The payment statuses an invoice can hold. */
@@ -277,8 +280,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $quantities = post_rows('quantity');
         $prices     = post_rows('unit_price');
 
-        if ($branchId <= 0 && $orderId <= 0) {
-            $errors[] = 'Choose the customer branch this invoice is billed to, or raise it for a retail order.';
+        if ($branchId <= 0 && $orderId <= 0 && $quotation <= 0) {
+            $errors[] = 'Raise the invoice for a customer branch, a retail order, or convert a quotation.';
         }
         if (strtotime($invoiceDate) === false) {
             $errors[] = 'The invoice date is not valid.';
@@ -346,8 +349,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             try {
                 $invoiceNo = db_transaction($pdo, function (PDO $tx) use ($editNo, $branchId, $quotation, $orderId, $invoiceDate, $lines, $total) {
+                    // The owner (invoice.ClientID): from the quotation being
+                    // converted, else from the retail order's buying customer,
+                    // else from the billed branch. An individual's invoice has
+                    // no branch but still needs its owner on record.
+                    if ($quotation > 0) {
+                        $owner = db_fetch_all('SELECT ClientID, COALESCE(BranchID, 0) AS B FROM quotation WHERE QuotationNo = :id', [':id' => $quotation]);
+                        $ownerClientId = (int) ($owner[0]['ClientID'] ?? 0);
+                        if (!$branchId) { $branchId = (int) ($owner[0]['B'] ?? 0); }
+                    } elseif ($orderId > 0) {
+                        $owner = db_fetch_all(
+                            'SELECT c.ClientID FROM `order` o LEFT JOIN client c ON c.UserID = o.UserID WHERE o.OrderID = :id',
+                            [':id' => $orderId]
+                        );
+                        $ownerClientId = (int) ($owner[0]['ClientID'] ?? 0) ?: null;
+                    } else {
+                        $owner = db_fetch_all('SELECT ClientID FROM client_branch WHERE BranchID = :id', [':id' => $branchId]);
+                        $ownerClientId = (int) ($owner[0]['ClientID'] ?? 0) ?: null;
+                    }
+
                     $header = [
                         'BranchID'         => $branchId > 0 ? $branchId : null,
+                        'ClientID'         => $ownerClientId,
                         'QuotationNo'      => $quotation > 0 ? $quotation : null,
                         'OrderID'          => $orderId > 0 ? $orderId : null,
                         'InvoiceDate'      => $invoiceDate,
@@ -476,6 +499,12 @@ if ($dbUp) {
          ORDER BY c.CompanyName, b.BranchName'
     );
 
+    $clientsForFilter = db_fetch_all(
+        "SELECT ClientID, CompanyName FROM client
+         WHERE IFNULL(AccountType, 'b2b') <> 'house'
+         ORDER BY CompanyName"
+    );
+
     // Orders that do not have an invoice yet — the candidates for "raise an
     // invoice for this order", which is the 1:1 in relationship #15.
     $orders = db_fetch_all(
@@ -490,15 +519,15 @@ if ($dbUp) {
     if ($action === 'view' || $action === 'edit') {
         $no      = max(0, (int) ($_GET['no'] ?? 0));
         $found   = db_fetch_all(
-            'SELECT i.InvoiceNo, i.BranchID, i.QuotationNo, i.OrderID, i.InvoiceDate, i.PaymentStatus,
+            'SELECT i.InvoiceNo, i.BranchID, i.ClientID, i.QuotationNo, i.OrderID, i.InvoiceDate, i.PaymentStatus,
                     i.TotalAmount, i.RemainingBalance, i.AmountInWords,
                     b.BranchName, b.BranchAddress, b.ContactNo,
-                    c.ClientID, c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address,
+                    c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address,
                     o.OrderDate, o.ShippingAddress, o.OrderStatus,
                     ou.FullName AS OrderCustomer, ou.Username AS OrderUsername, ou.Email AS OrderEmail, ou.Phone AS OrderPhone
              FROM invoice i
              LEFT JOIN client_branch b ON b.BranchID = i.BranchID
-             LEFT JOIN client        c ON c.ClientID = b.ClientID
+             LEFT JOIN client        c ON c.ClientID = i.ClientID
              LEFT JOIN `order`       o ON o.OrderID  = i.OrderID
              LEFT JOIN `user`       ou ON ou.UserID  = o.UserID
              WHERE i.InvoiceNo = :id',
@@ -562,12 +591,12 @@ if ($dbUp) {
         $quoteNo = max(0, (int) ($_GET['from_quotation'] ?? 0));
         if ($quoteNo > 0) {
             $q = db_fetch_all(
-                'SELECT q.QuotationNo, q.BranchID, q.Subject, q.TotalAmount, q.Status,
+                'SELECT q.QuotationNo, q.BranchID, q.ClientID, q.Subject, q.TotalAmount, q.Status,
                         b.BranchName, c.CompanyName,
                         (SELECT i.InvoiceNo FROM invoice i WHERE i.QuotationNo = q.QuotationNo) AS InvoiceNo
                  FROM quotation q
-                 JOIN client_branch b ON b.BranchID = q.BranchID
-                 JOIN client c ON c.ClientID = b.ClientID
+                 LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+                 LEFT JOIN client c ON c.ClientID = q.ClientID
                  WHERE q.QuotationNo = :id',
                 [':id' => $quoteNo]
             );
@@ -647,7 +676,7 @@ if ($dbUp) {
     $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
     $from     = ' FROM invoice i
                   LEFT JOIN client_branch b ON b.BranchID = i.BranchID
-                  LEFT JOIN client        c ON c.ClientID = b.ClientID
+                  LEFT JOIN client        c ON c.ClientID = i.ClientID
                   LEFT JOIN `order`       o ON o.OrderID  = i.OrderID
                   LEFT JOIN `user`       ou ON ou.UserID  = o.UserID';
 
@@ -656,8 +685,8 @@ if ($dbUp) {
 
     $rows = db_fetch_all(
         'SELECT i.InvoiceNo, i.InvoiceDate, i.PaymentStatus, i.TotalAmount, i.RemainingBalance,
-                i.QuotationNo, i.OrderID, i.BranchID,
-                b.BranchName, c.ClientID, c.CompanyName,
+                i.QuotationNo, i.OrderID, i.BranchID, i.ClientID AS OwnerClientID,
+                b.BranchName, c.CompanyName,
                 ou.FullName AS OrderCustomer,
                 (SELECT COUNT(*) FROM invoice_item ii WHERE ii.InvoiceNo = i.InvoiceNo) AS `Lines`,
                 (SELECT COUNT(*) FROM payment_receipt pr WHERE pr.InvoiceNo = i.InvoiceNo) AS Receipts'
@@ -742,14 +771,15 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
         </select>
       </label>
       <label class="report-filter-field">
-        <span class="form-label">Company</span>
+        <span class="form-label">Customer</span>
         <select class="form-select form-select-sm" name="client">
-          <option value="0">All companies</option>
+          <option value="0">All customers</option>
           <?php
           $companies = [];
-          foreach ($branches as $branch) {
-              $companies[(int) $branch['ClientID']] = $branch['CompanyName'];
+          foreach ($clientsForFilter as $clientOpt) {
+              $companies[(int) $clientOpt['ClientID']] = $clientOpt['CompanyName'];
           }
+          ksort($companies);
           foreach ($companies as $companyId => $companyName): ?>
           <option value="<?= $companyId ?>" <?= $filterClient === $companyId ? 'selected' : '' ?>><?= htmlspecialchars($companyName) ?></option>
           <?php endforeach; ?>
@@ -779,11 +809,11 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
       'columns'     => ['#', 'Date', 'Billed to', 'Source', 'Lines', 'Total', 'Balance', 'Status', ''],
       'rows'        => array_map(function ($row) {
           $billedTo = $row['CompanyName'] !== null
-              ? '<a class="text-decoration-none" href="admin-customers.php?action=edit&id=' . (int) $row['ClientID'] . '">'
+              ? '<a class="text-decoration-none" href="admin-customers.php?action=edit&id=' . (int) $row['OwnerClientID'] . '">'
                   . htmlspecialchars($row['CompanyName']) . '</a>'
-                  . '<small class="d-block text-muted">' . htmlspecialchars((string) $row['BranchName']) . '</small>'
+                  . '<small class="d-block text-muted">' . (!empty($row['BranchName']) ? htmlspecialchars($row['BranchName']) : 'individual — no branch') . '</small>'
               : '<span class="fw-semibold">' . htmlspecialchars((string) ($row['OrderCustomer'] ?? 'Walk-in customer')) . '</span>'
-                  . '<small class="d-block text-muted">retail order — no company branch</small>';
+                  . '<small class="d-block text-muted">retail order — no customer record</small>';
 
           $source = $row['QuotationNo'] !== null
               ? '<a class="text-decoration-none" href="admin-quotations.php?action=view&id=' . (int) $row['QuotationNo'] . '">Quotation #' . (int) $row['QuotationNo'] . '</a>'
@@ -1186,7 +1216,7 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
             <div class="col-md-7">
               <label class="form-label" for="branch_id">Customer branch</label>
               <select class="form-select" id="branch_id" name="branch_id">
-                <option value="0">— no branch (retail customer) —</option>
+                <option value="0">— no branch (individual customer / retail order) —</option>
                 <?php $lastCompany = null; foreach ($branches as $branch):
                     if ($lastCompany !== $branch['CompanyName']) {
                         if ($lastCompany !== null) echo '</optgroup>';

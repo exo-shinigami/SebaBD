@@ -311,9 +311,9 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
       'empty_action' => $filterStatus !== '' || $search !== ''
           ? '<a class="btn btn-outline-secondary btn-sm" href="admin-orders.php">Clear filters</a>'
           : '<a class="btn btn-accent btn-sm" href="index.php?all=1#featured-products"><i class="fa-solid fa-store me-1"></i>Open the storefront</a>',
-      'summary'      => pagination_summary($orderPage, 'order'),
-      'pagination'   => pagination_links($orderPage, $listUrl),          'note'         => 'Order lines snapshot the price at order time (<code>UnitPrice</code>), so a later catalog change never rewrites an order. '
-                            . '<code>order.OrderType</code> separates customer orders from SebaBD\'s own internal orders, which are booked to the internal branch in <code>order.BranchID</code>.',
+      'note'         => 'Order lines snapshot the price at order time (<code>UnitPrice</code>), so a later catalog change never rewrites an order. '
+                            . 'Staff accounts no longer order from the storefront, so every new order is a customer sale; the legacy '
+                            . '<code>Internal</code> OrderType only marks historical rows booked to the internal branch.',
   ]) ?>
 
   <?php else: ?>
@@ -335,7 +335,8 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
         <?php if (($order['OrderType'] ?? ORDER_TYPE_RETAIL) === ORDER_TYPE_INTERNAL): ?>
         <div class="alert alert-light border">
           <i class="fa-solid fa-building-shield me-2"></i>
-          This is an <strong>internal order</strong> — SebaBD buying for itself, not a customer sale.
+          This is a <strong>legacy internal order</strong> — SebaBD buying for itself, not a customer sale. Staff accounts no
+          longer order from the storefront; new stock intake happens through <a href="admin-purchase-orders.php">purchase orders</a>.
           <?php if (!empty($order['BranchName'])): ?>
           It is booked to <?= htmlspecialchars((string) $order['BranchCompany']) ?> —
           <?= htmlspecialchars((string) $order['BranchName']) ?>, so its invoice follows the same branch.

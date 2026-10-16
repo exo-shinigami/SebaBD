@@ -53,15 +53,18 @@ class QuotationReport extends SebaBdReport
         )->pipe($this->dataStore('by_month'));
 
         /* Who is asking ------------------------------------------------------- */
+        /* Ownership is quotation.ClientID. Individuals file no branch, so a
+         * branch-joined grouping would silently drop them; the branch name
+         * comes along when the quotation has one. */
         $this->src('db')->query(
             "SELECT cl.CompanyName        AS Client,
-                    b.BranchName          AS Branch,
+                    COALESCE(b.BranchName, 'No branch') AS Branch,
                     COUNT(q.QuotationNo)  AS Quotations,
                     SUM(q.TotalAmount)    AS Quoted
              FROM quotation q
-             JOIN client_branch b ON b.BranchID = q.BranchID
-             JOIN client cl       ON cl.ClientID = b.ClientID
-             GROUP BY b.BranchID, b.BranchName, cl.CompanyName
+             LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+             LEFT JOIN client cl       ON cl.ClientID = q.ClientID
+             GROUP BY cl.ClientID, cl.CompanyName, b.BranchName
              ORDER BY Quoted DESC"
         )->pipe($this->dataStore('by_branch'));
 
@@ -77,7 +80,7 @@ class QuotationReport extends SebaBdReport
                     i.InvoiceNo                                       AS InvoiceNo
              FROM quotation q
              LEFT JOIN client_branch b ON b.BranchID = q.BranchID
-             LEFT JOIN client cl       ON cl.ClientID = b.ClientID
+             LEFT JOIN client cl       ON cl.ClientID = q.ClientID
              LEFT JOIN invoice i       ON i.QuotationNo = q.QuotationNo
              ORDER BY q.QuotationDate DESC"
         )->pipe($this->dataStore('quotations'));

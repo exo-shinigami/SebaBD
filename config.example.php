@@ -21,15 +21,19 @@ return [
     ],
 
     /**
-     * The two house accounts every quotation and every internal order is filed
-     * under. They are matched by name, so if your database already calls them
-     * something else, change the names here rather than in the code — and if a
-     * row is missing, the application creates it on first use (see
-     * system_branch_id() in helpers.php, and database/migrate-internal-workflow.sql
-     * which seeds them).
+     * The two house accounts (client rows with AccountType = 'house'). They
+     * are matched by name, so if your database already calls them something
+     * else, change the names here rather than in the code — and if a row is
+     * missing, the application creates the walk-in rows on first use (see
+     * system_branch_id() in helpers.php, and
+     * database/migrate-internal-workflow.sql which seeds them).
      *
-     *   walkin    a visitor with no company asking for a price
-     *   internal  a staff member ordering or requesting for SebaBD itself
+     *   walkin    a visitor or individual customer without a company record
+     *             — used for quotations without a branch, and the sales
+     *             counter is the filing address
+     *   internal  LEGACY — staff no longer order from the storefront, so
+     *             nothing files here any more; the rows stay because historical
+     *             Internal orders and quotations point at them
      */
     'system_accounts' => [
         'walkin' => [
