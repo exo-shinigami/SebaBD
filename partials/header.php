@@ -27,6 +27,9 @@ $user = current_user();
 
       <!-- CSS File -->
        <link rel="stylesheet" href="style.css">
+       <?php if (basename($_SERVER['SCRIPT_NAME']) === 'diagnostic.php'): ?>
+       <link rel="stylesheet" href="assets/diagnostic.css">
+       <?php endif; ?>
 </head>
     <body class="app-shell">
       <div class="container-fluid px-0">

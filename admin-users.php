@@ -29,7 +29,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-users.php');
 $dbUp   = db() !== null;
-// Is the activation column in place? (database/migrate-internal-workflow.sql)
+// Is the activation column in place? (database/e_commerce.sql)
 // Until it is, every account lists as active and the toggle stays hidden, so
 // this page keeps working on a database that has not been migrated yet.
 $activationSupported = $dbUp && user_activation_supported();
@@ -95,8 +95,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             )[0]['n'] ?? 0);
 
             if (!$activationSupported) {
-                $errors[] = 'The account state column is missing. Run '
-                          . '<code>database/migrate-internal-workflow.sql</code>, then reload this page.';
+                $errors[] = 'The account state column is missing. Re-import '
+                          . '<code>database/e_commerce.sql</code>, then reload this page.';
             } elseif (!$target) {
                 $errors[] = 'That account no longer exists.';
             } elseif (!$activate && $userId === (int) $user['UserID']) {
@@ -399,7 +399,7 @@ echo admin_lead('Users &amp; roles', 'Roles belong to SebaBD staff only — a cu
   <div class="alert alert-warning">
     <i class="fa-solid fa-database me-2"></i>
     Accounts cannot be deactivated yet: the <code>user</code> table has no <code>IsActive</code> column.
-    Run <code>database/migrate-internal-workflow.sql</code> once, then reload this page.
+    Re-import <code>database/e_commerce.sql</code>, then reload this page.
   </div>
   <?php endif; ?>
 

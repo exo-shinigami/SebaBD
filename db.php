@@ -61,6 +61,41 @@ function db(): ?PDO
 }
 
 /**
+ * Run a statement that returns at most one row and return it as an array, or null.
+ *
+ * A small shared helper for diagnostic and lookup code that only needs one row
+ * (for example a SHOW CREATE TABLE or a single configuration row). It reuses
+ * the same PDO connection and fetch mode as the rest of the application.
+ */
+function db_query_one(PDO $pdo, string $sql, array $params = []): ?array
+{
+    $rows = db_fetch_all($sql, $params);
+
+    return $rows[0] ?? null;
+}
+
+/**
+ * Run a statement that returns exactly one column from one row and return that
+ * column value as a scalar, or null when no row is returned.
+ *
+ * Same shared PDO connection as the rest of the application. Used by this
+ * helper for the few places where we only need DATABASE(), VERSION(), or a
+ * single CREATE TABLE column.
+ */
+function db_query_scalar(PDO $pdo, string $sql, array $params = []): ?string
+{
+    $row = db_query_one($pdo, $sql, $params);
+    if (!$row) {
+        return null;
+    }
+    $value = reset($row);
+    if ($value === null || $value === '') {
+        return null;
+    }
+    return (string) $value;
+}
+
+/**
  * Run a prepared statement and fetch all rows (or [] if the DB is down).
  */
 function db_fetch_all(string $sql, array $params = []): array

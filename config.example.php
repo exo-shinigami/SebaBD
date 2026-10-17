@@ -25,8 +25,8 @@ return [
      * are matched by name, so if your database already calls them something
      * else, change the names here rather than in the code — and if a row is
      * missing, the application creates the walk-in rows on first use (see
-     * system_branch_id() in helpers.php, and
-     * database/migrate-internal-workflow.sql which seeds them).
+     * system_branch_id() in helpers.php, and database/e_commerce.sql which
+     * seeds them).
      *
      *   walkin    a visitor without a company record — quotations with no
      *             branch, filed at the sales counter

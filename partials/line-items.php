@@ -25,8 +25,8 @@
  * from the product — the vendor warrants it and the catalog stores it in
  * product.DefaultWarrantyMonths — so this control displays the catalog value and
  * the server re-reads it on save; whatever a browser posts is ignored. The
- * database trigger in database/migrate-internal-workflow.sql enforces the same
- * rule, so no code path can write a different number.
+ * database trigger in database/e_commerce.sql enforces the same rule, so no
+ * code path can write a different number.
  */
 $catalog       = $catalog       ?? [];
 $lines         = $lines         ?? [];

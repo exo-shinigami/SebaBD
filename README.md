@@ -10,7 +10,7 @@ Two things are deliberately kept separate:
 
 | Layer | What it is | Where it lives |
 | --- | --- | --- |
-| **Database design** | The schema, keys, constraints and relationships this project is graded on | [`database/e_commerce_schema.sql`](database/e_commerce_schema.sql), [`database/e_commerce.sql`](database/e_commerce.sql), the **Database design** section below |
+| **Database design** | The schema, keys, constraints and relationships this project is graded on | [`database/e_commerce.sql`](database/e_commerce.sql), the **Database design** section below |
 | **Application** | Ordinary PHP pages that read/write that schema through PDO | Root `*.php` files, `partials/`, `assets/`, `reports/`, `api/` |
 
 Everything the application shows is stored in, or derived from, the database — there is no
@@ -24,7 +24,7 @@ results.
 | --- | --- |
 | Database | `e_commerce` (MySQL / MariaDB, InnoDB, `utf8mb4`) |
 | Tables | 17 (catalog, customers, stock, orders, quotations, billing, procurement) |
-| Foreign keys | 23, declared with explicit `ON DELETE` behaviour |
+| Foreign keys | 25, declared with explicit `ON DELETE` behaviour |
 | Primary keys | Explicit integer keys (`OrderID`, `ProductID`, …) — no `AUTO_INCREMENT` |
 | Server language | PHP 8.1+ (verified on 8.2.12) |
 | Database access | PDO with `pdo_mysql`, native prepared statements |
@@ -56,38 +56,19 @@ From the project root:
 C:\xampp\mysql\bin\mysql.exe -u root < database\e_commerce.sql
 ```
 
-The dump creates the `e_commerce` database, all 17 tables, their keys/constraints **and** a
-small set of realistic sample rows. If you prefer a clean database instead, import
-`database/e_commerce_schema.sql` instead — import one or the other, never both.
+That one file is the whole database: it creates the `e_commerce` database, all 17 tables,
+their keys, foreign keys, `CHECK` constraints and triggers, **and** a small set of realistic
+sample rows (including the sample logins below). There is no schema-only variant and no
+migration step — this is the single source of truth for the design.
 
-If the database was created before the separate B2B role existed, run the migration once:
+The script is re-runnable: it drops the 17 tables it owns and rebuilds them, so importing it
+again gives the same clean result instead of failing with *table already exists*.
 
-```powershell
-C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-b2b-client-role.sql
-```
+> **It replaces the contents of those 17 tables.** Anything entered through the site since
+the last import is lost. Back it up first if you need it:
+> `C:\xampp\mysql\bin\mysqldump.exe -u root e_commerce > backup.sql`
 
-And if it was created before walk-in quotations, internal orders and account deactivation
-existed, run the second migration once as well. It adds `user.IsActive`, `order.OrderType` and
-`order.BranchID`, creates the two house accounts described below, repairs any quotation line
-whose warranty differs from its product, and installs the warranty trigger:
-
-```powershell
-C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-internal-workflow.sql
-```
-
-Finally, if it was created under the **old customer model** — where customer logins held the
-`Client Account` or `B2B Client Account` roles — run the customer-model migration once. It
-makes `user.RoleID` nullable (only SebaBD staff hold roles now), retires those two roles, adds
-`client.AccountType` (`individual` | `b2b` | `house`), gives every customer login a client
-record of their own, and adds/backfills `quotation.ClientID` and `invoice.ClientID`, which are
-how a document is tied to its owner:
-
-```powershell
-C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-customer-model.sql
-```
-
-All migration files are guarded, so running one twice is harmless. A database imported from
-the current `database/e_commerce.sql` already contains all of this and needs neither.
+You can also import it from phpMyAdmin (**Import** → choose the file → **Go**).
 
 ### 3. Check the connection settings
 
@@ -158,8 +139,8 @@ same form:
 
 The two house accounts are ordinary `client` rows with no login (`client.UserID` is `NULL`,
 `AccountType = 'house'`), and they always exist, so the house branch foreign keys can never
-fail. They are seeded by the migration, and `walkin_branch_id()` in `helpers.php` creates the
-walk-in rows on demand inside the same transaction if a row is ever missing. The internal
+fail. They are seeded by `database/e_commerce.sql`, and `walkin_branch_id()` in `helpers.php`
+creates the walk-in rows on demand inside the same transaction if a row is ever missing. The internal
 house account is legacy — nothing files under it any more, but the rows stay because old
 `Internal` orders and quotations point at them. The back office labels house-origin paperwork
 with an **Internal** or **Walk-in** badge, and `admin-orders.php` can filter on
@@ -181,9 +162,9 @@ Two more rules the application and the database agree on:
 ## Database design
 
 This is the part the project exists for. The schema is stored once, in
-[`database/e_commerce_schema.sql`](database/e_commerce_schema.sql) (structure only) and
-[`database/e_commerce.sql`](database/e_commerce.sql) (structure + sample rows). Every
-diagram, table and rule below describes exactly those files.
+[`database/e_commerce.sql`](database/e_commerce.sql) — structure, keys, constraints,
+triggers and sample rows together. Every diagram, table and rule below describes exactly
+that file.
 
 ### Design principles
 
@@ -894,9 +875,7 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 
 | File / folder | Responsibility |
 | --- | --- |
-| `database/e_commerce.sql` | Full schema + the sample data set, with the sample logins ready to use |
-| `database/e_commerce_schema.sql` | The same schema without sample rows |
-| `database/migrate-b2b-client-role.sql` | One-off migration adding the B2B role to older databases |
+| `database/e_commerce.sql` | The whole database: schema, keys, constraints, triggers and the sample data set |
 | `reports/bootstrap.php` | Report base class, catalogue, permissions, page wrapper |
 | `reports/*Report.php` | Report SQL and data preparation |
 | `reports/*.view.php` | Report markup (tables, charts, KPIs) |
@@ -1152,7 +1131,7 @@ debug output, enable HTTPS, configure secure session cookies and replace the sam
 ## Where to start
 
 1. Import `database/e_commerce.sql`, then run the site.
-2. Read the **Database design** section above with `database/e_commerce_schema.sql` open beside it.
+2. Read the **Database design** section above with `database/e_commerce.sql` open beside it.
 3. Sign in as `admin` and open `dashboard.php` — the store overview shows revenue, open orders
    and quotations, payments due and stock alerts.
 4. Open a product (`index.php` → any card) to see `product`, `category`, `vendor` and
