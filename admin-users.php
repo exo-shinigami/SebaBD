@@ -36,7 +36,7 @@ $activationSupported = $dbUp && user_activation_supported();
 // One fragment for both account queries below: on a migrated database the real
 // column, otherwise a constant, so the pages read identically either way.
 $activeSelect = $activationSupported ? 'u.IsActive' : '1 AS IsActive';
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'new', 'edit']);
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 

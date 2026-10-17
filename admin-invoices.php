@@ -25,7 +25,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-invoices.php');
 $dbUp   = db() !== null;
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'new', 'edit', 'view']);
 $errors = [];
 
 $filterStatus = trim((string) ($_GET['status'] ?? ''));

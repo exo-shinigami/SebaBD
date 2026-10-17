@@ -2,6 +2,10 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/catalog-data.php';
 require_once __DIR__ . '/helpers.php';
+// The product cards post their Add-to-cart form with a return URL, so the
+// storefront needs cartridge helpers even on the AJAX path, where
+// partials/header.php (and its own cart-data.php include) never runs.
+require_once __DIR__ . '/cart-data.php';
 
 /* ------------------------------------------------------ storefront view
  *

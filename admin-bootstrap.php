@@ -127,6 +127,22 @@ function back_office_modules(): array
     ];
 }
 
+/**
+ * The module page's action, restricted to the ones that page implements.
+ *
+ * ?action= is typed by people and copied from old bookmarks, so an unknown
+ * value must not silently fall through to another branch — an unrecognised
+ * action used to land on the edit/view read with no record loaded (which
+ * emitted PHP warnings) or on a blank "new" form for a product that does not
+ * exist. Anything outside the page's list is its plain list view.
+ */
+function admin_action(array $allowed): string
+{
+    $action = (string) ($_GET['action'] ?? 'list');
+
+    return in_array($action, $allowed, true) ? $action : 'list';
+}
+
 /** One module's metadata, or null when the page is not a module. */
 function back_office_module(string $page): ?array
 {

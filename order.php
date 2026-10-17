@@ -91,8 +91,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             clear_old();
 
             flash_set('success', 'Order #' . $orderId . ' placed — total ' . money($total) . '. We will call to confirm delivery.');
-            // AJAX callers get {ok:true, redirect:…} instead of a 302.
-            post_success('order.php');
+            // Land on the order itself, not back on an emptied form: the
+            // customer should see what they just ordered. Same destination as
+            // the basket's checkout, so both routes confirm the same way.
+            post_success('order-detail.php?id=' . $orderId . '&placed=1');
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $errors[] = 'Could not place the order. ' . (APP_DEBUG ? $e->getMessage() : 'Please try again.');

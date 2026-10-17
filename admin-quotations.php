@@ -19,7 +19,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-quotations.php');
 $dbUp   = db() !== null;
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'new', 'edit', 'view']);
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 

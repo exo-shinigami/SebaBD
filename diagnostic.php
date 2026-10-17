@@ -5,8 +5,12 @@
  * This page is a LOCAL DEBUG TOOL. It exists only to show, in one place, which
  * MySQL instance and which database the application is actually talking to, and
  * to let you run a live INSERT test that reproduces the client-insert failure
- * point. It is not part of the storefront, it requires no sign-in, and it
- * should not be left accessible on a public server.
+ * point. It is not part of the storefront.
+ *
+ * Because it prints connection details AND writes a throw-away row, it is not
+ * public: a request is served only from the machine running the site
+ * (127.0.0.1 / ::1) or to a signed-in Admin. Anyone else gets a plain 404, so
+ * deploying the folder cannot expose the database internals.
  *
  * It reuses the application's existing bootstrap (db.php loads config.php and
  * exposes db() and db_fetch_all()). No database logic is reimplemented here.
@@ -22,6 +26,21 @@ try {
     require_once __DIR__ . '/helpers.php';
 } catch (Throwable $e) {
     $configProblem = 'Could not load the application bootstrap: ' . $e->getMessage();
+}
+
+/* ------------------------------------------------------------ who may look
+ * The helper shows the database host, user and schema and can insert a test
+ * row, so it must never be a public page. Serving it to loopback keeps the
+ * local XAMPP workflow unchanged; an Admin may also open it after a deploy,
+ * and everyone else gets the ordinary 404 rather than a hint that it exists. */
+$diagnosticLocal = in_array((string) ($_SERVER['REMOTE_ADDR'] ?? ''), ['127.0.0.1', '::1'], true);
+$diagnosticUser  = function_exists('current_user') ? current_user() : null;
+$diagnosticAdmin = $diagnosticUser !== null && ($diagnosticUser['RoleName'] ?? '') === 'Admin';
+
+if (!$diagnosticLocal && !$diagnosticAdmin) {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=UTF-8');
+    exit('Not found.');
 }
 
 $connected       = false;

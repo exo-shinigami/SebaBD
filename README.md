@@ -64,6 +64,15 @@ migration step — this is the single source of truth for the design.
 The script is re-runnable: it drops the 17 tables it owns and rebuilds them, so importing it
 again gives the same clean result instead of failing with *table already exists*.
 
+The file always works on `e_commerce` — it contains `CREATE DATABASE IF NOT EXISTS` and
+`USE e_commerce`, so naming a different database on the command line does **not** redirect it.
+To rehearse an import against a scratch schema without touching the live one, swap that one
+line:
+
+```bash
+sed 's/^USE `e_commerce`;/USE `e_commerce_test`;/' database/e_commerce.sql | mysql -u root
+```
+
 > **It replaces the contents of those 17 tables.** Anything entered through the site since
 the last import is lost. Back it up first if you need it:
 > `C:\xampp\mysql\bin\mysqldump.exe -u root e_commerce > backup.sql`
@@ -1099,6 +1108,7 @@ debug output, enable HTTPS, configure secure session cookies and replace the sam
 | --- | --- |
 | Blank page or PHP errors | PHP 8.1+ behind Apache; project inside the web root; PHP error log |
 | “Database is offline” | MySQL started, `e_commerce` imported, `config.php` credentials |
+| Need connection details or an insert test | `diagnostic.php` — served only to the machine running the site (`127.0.0.1` / `::1`) or to a signed-in Admin; everyone else gets a 404 |
 | Sample login fails | The sample database was imported (`database/e_commerce.sql`) so the accounts exist; compare the username/password with the **Sample logins** table above |
 | Styles or icons missing | Page served over HTTP (not `file://`); internet access for the CDNs |
 | Product images missing | Paths in `product_meta()` and files under `images/products/` (case-sensitive on many servers) |
