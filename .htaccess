@@ -8,6 +8,18 @@
 # normal site chrome with a search box and the catalog shortcuts.
 ErrorDocument 404 404.php
 
+# ErrorDocument's URL is resolved against the *server's* document root, so on a
+# subdirectory install (htdocs/<project>/) it points at a file that does not
+# exist and Apache falls back to its own seven-byte "Not Found" body — the page
+# above never renders. The rewrite resolves against this directory instead, so
+# the friendly page works whatever the folder is called, and the two conditions
+# let real files and directories pass through untouched. 404.php answers 404
+# with http_response_code() itself, so the status stays correct.
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ 404.php [L]
+
 # Never serve a PHP source file as text. If PHP ever fails to load, Apache would
 # otherwise hand out config.php (database credentials) and the SQL dumps as
 # plain files. Denying them outright removes that failure mode.

@@ -103,7 +103,11 @@ SET @sql := (SELECT IF(COUNT(*) = 0,
     WHERE table_schema = @db AND table_name = 'quotation' AND column_name = 'ClientID');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
-SET @sql := (SELECT IF(COUNT(*) = 0,
+-- The guard counts the rows where the column is still NOT NULL, so it fires
+-- when COUNT(*) > 0 (i.e. the column exists and still refuses NULL). Using
+-- '= 0' here would never fire: the row only matches while the column is NOT
+-- NULL, which is exactly when the MODIFY is needed.
+SET @sql := (SELECT IF(COUNT(*) > 0,
         'ALTER TABLE `quotation` MODIFY `BranchID` int(11) DEFAULT NULL',
         'DO 0')
     FROM information_schema.columns

@@ -75,7 +75,7 @@ CREATE TABLE `client` (
 INSERT INTO `client` (`ClientID`, `UserID`, `CompanyName`, `ContactPerson`, `Email`, `Phone`, `Address`, `AccountType`) VALUES
 (1, 4, 'Meghna Infotech Ltd', 'Farhana Rahman', 'contact@meghnainfotech.com', '+880 1711 100104', 'Plot 12, Road 5, Banani, Dhaka 1213', 'b2b'),
 (2, NULL, 'Karnaphuli Logistics Ltd', 'Shariful Islam', 'info@karnaphulilogistics.com', '+880 1811 100105', 'Holding 45, Agrabad C/A, Chattogram 4100', 'b2b'),
-(3, NULL, 'Bijoy Technologies Ltd', 'Arif Hossain', 'arif@bijoytech.com', '+880 1911 100106', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215', 'b2b'),
+(3, 5, 'Bijoy Technologies Ltd', 'Arif Hossain', 'arif@bijoytech.com', '+880 1911 100106', 'Level 8, Bashundhara City, Panthapath, Dhaka 1215', 'b2b'),
 (4, NULL, 'Bright Computer Mart', 'Nazmul Hasan', 'sales@brightcomputermart.com', '+880 1611 100107', 'Shop 212, New Market, Mirpur Road, Dhaka 1205', 'b2b'),
 -- The two house accounts below are required, not demo data: storefront
 -- quotations from visitors without a company and back-office paperwork need a
@@ -133,12 +133,15 @@ CREATE TABLE `invoice` (
 --
 -- Dumping data for table `invoice`
 --
+-- ClientID is the document's owner; where a branch is named it is that branch's
+-- client, so invoice 5004 (branch 4) belongs to Bijoy Technologies, not to
+-- Bright Computer Mart just because both carry the number 4.
 
 INSERT INTO `invoice` (`InvoiceNo`, `BranchID`, `ClientID`, `QuotationNo`, `OrderID`, `InvoiceDate`, `PaymentStatus`, `TotalAmount`, `RemainingBalance`, `AmountInWords`) VALUES
 (5001, 1, 1, 1001, NULL, '2024-02-12', 'PARTIAL', 420000.00, 120000.00, 'Four Hundred Twenty Thousand Taka'),
 (5002, 3, 2, 1003, NULL, '2024-02-22', 'PAID', 612000.00, 0.00, 'Six Hundred Twelve Thousand Taka'),
 (5003, 1, 1, NULL, 1, '2024-03-01', 'DUE', 210000.00, 210000.00, 'Two Hundred Ten Thousand Taka'),
-(5004, 4, 4, NULL, 4, '2024-03-12', 'PAID', 288000.00, 0.00, 'Two Hundred Eighty Eight Thousand Taka');
+(5004, 4, 3, NULL, 4, '2024-03-12', 'PAID', 288000.00, 0.00, 'Two Hundred Eighty Eight Thousand Taka');
 
 -- --------------------------------------------------------
 
@@ -195,11 +198,13 @@ CREATE TABLE `order` (
 -- retail order hangs off the user who placed it. SebaBD staff do not order from
 -- the storefront; the historical 'Internal' OrderType only marks legacy rows,
 -- and procurement now lives in purchase_order (the vendor pipeline).
+-- Every sample order below belongs to a customer login, never a staff account,
+-- so each order really does hang off the customer who placed it.
 INSERT INTO `order` (`OrderID`, `UserID`, `OrderDate`, `TotalAmount`, `OrderStatus`, `OrderType`, `BranchID`, `ShippingAddress`) VALUES
-(1, 2, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Retail', NULL, 'Plot 12, Road 5, Banani, Dhaka 1213'),
-(2, 2, '2024-03-05 14:30:00', 132000.00, 'Processing', 'Retail', NULL, 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
-(3, 1, '2024-03-10 09:00:00', 24000.00, 'Pending', 'Retail', NULL, 'Flat 4B, Green Road, Dhaka 1205'),
-(4, 2, '2024-03-12 16:45:00', 288000.00, 'Completed', 'Retail', NULL, 'Holding 9, Agrabad C/A, Chattogram 4100');
+(1, 4, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Retail', NULL, 'Plot 12, Road 5, Banani, Dhaka 1213'),
+(2, 4, '2024-03-05 14:30:00', 132000.00, 'Processing', 'Retail', NULL, 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
+(3, 5, '2024-03-10 09:00:00', 24000.00, 'Pending', 'Retail', NULL, 'Flat 4B, Green Road, Dhaka 1205'),
+(4, 5, '2024-03-12 16:45:00', 288000.00, 'Completed', 'Retail', NULL, 'Holding 9, Agrabad C/A, Chattogram 4100');
 
 -- --------------------------------------------------------
 
@@ -326,10 +331,13 @@ CREATE TABLE `product_instance` (
 --
 -- Dumping data for table `product_instance`
 --
+-- A serial number named on an invoice_item is 'Sold': that is what the
+-- application writes when a unit is billed, so units 1 and 2 (named on
+-- invoices 5001 and 5003) are no longer 'In Stock'.
 
 INSERT INTO `product_instance` (`EquipmentID`, `ProductID`, `SerialNumber`, `PurchaseDate`, `VendorWarrantyExpiry`, `ClientWarrantyExpiry`, `Status`) VALUES
-(1, 1, '5CG1427W9K', '2024-01-15', '2026-01-15', '2026-01-15', 'In Stock'),
-(2, 1, '5CG1427W9L', '2024-01-15', '2026-01-15', '2026-01-15', 'In Stock'),
+(1, 1, '5CG1427W9K', '2024-01-15', '2026-01-15', '2026-01-15', 'Sold'),
+(2, 1, '5CG1427W9L', '2024-01-15', '2026-01-15', '2026-01-15', 'Sold'),
 (3, 3, 'FOC2341X0AB', '2024-02-01', '2027-02-01', '2027-02-01', 'In Stock'),
 (4, 3, 'FOC2341X0AC', '2024-02-01', '2027-02-01', '2027-02-01', 'Sold');
 
@@ -377,12 +385,14 @@ CREATE TABLE `quotation` (
 --
 -- Dumping data for table `quotation`
 --
+-- ClientID is the document's owner: same rule as the invoice table above, so
+-- quotation 1004 (branch 4) is Bijoy Technologies' document.
 
 INSERT INTO `quotation` (`QuotationNo`, `BranchID`, `ClientID`, `QuotationDate`, `Subject`, `TotalAmount`, `AmountInWords`, `Status`) VALUES
 (1001, 1, 1, '2024-02-10', 'Office IT Upgrade Proposal', 420000.00, 'Four Hundred Twenty Thousand Taka', 'Accepted'),
 (1002, 2, 1, '2024-02-15', 'Branch Expansion Equipment', 144000.00, 'One Hundred Forty Four Thousand Taka', 'Pending'),
 (1003, 3, 2, '2024-02-20', 'Network Infrastructure Setup', 612000.00, 'Six Hundred Twelve Thousand Taka', 'Accepted'),
-(1004, 4, 4, '2024-02-25', 'Peripherals Order', 60000.00, 'Sixty Thousand Taka', 'Rejected');
+(1004, 4, 3, '2024-02-25', 'Peripherals Order', 60000.00, 'Sixty Thousand Taka', 'Rejected');
 
 -- --------------------------------------------------------
 
@@ -455,11 +465,14 @@ CREATE TABLE `user` (
 
 -- IsActive 1 = may sign in. An account is deactivated (0) rather than deleted
 -- once it has placed orders or issued documents, because those rows name it.
+-- RoleID is NULL for the customer logins ('client', 'bijoy'): only SebaBD staff
+-- hold a role, and each of these two is a company's contact login.
 INSERT INTO `user` (`UserID`, `RoleID`, `Username`, `PasswordHash`, `Email`, `FullName`, `Phone`, `IsActive`, `CreatedAt`) VALUES
 (1, 1, 'admin', '$2y$10$sg9qJdZ9Z48VVpM45KJIuOVW.LzNERCltRXHbTPsl/wSpFtIBSD16', 'mahmudul.hasan@sebabd.com', 'Mahmudul Hasan', '+880 1711 100101', 1, '2026-09-25 12:37:17'),
 (2, 2, 'sales', '$2y$10$ngPNRoDB.3UT5gHmj4XJtuOfSFvrhCYFanBJNle2gqCuC7eN9Y/l.', 'nusrat.jahan@sebabd.com', 'Nusrat Jahan', '+880 1811 100102', 1, '2026-09-25 12:37:17'),
 (3, 3, 'inventory', '$2y$10$Ia.o8s6YeAmeFh1yNGSbhe7XNnU2q1ZXOmK.CrjUNcJCA0L6EFrzq', 'tanvir.ahmed@sebabd.com', 'Tanvir Ahmed', '+880 1911 100103', 1, '2026-09-25 12:37:17'),
-(4, NULL, 'client', '$2y$10$wsOwK/s2pfikbrjdlSz/P.ECSf/9q4VCeBLIOo8O9g.3ttgzKIf0y', 'contact@meghnainfotech.com', 'Farhana Rahman', '+880 1711 100104', 1, '2026-09-25 12:37:17');
+(4, NULL, 'client', '$2y$10$wsOwK/s2pfikbrjdlSz/P.ECSf/9q4VCeBLIOo8O9g.3ttgzKIf0y', 'contact@meghnainfotech.com', 'Farhana Rahman', '+880 1711 100104', 1, '2026-09-25 12:37:17'),
+(5, NULL, 'bijoy', '$2y$10$zHG.xn1v5blf1PcCl5BX.OkysuQ9o7OYz3o8NIx6q0uvYZstkgEv6', 'arif@bijoytech.com', 'Arif Hossain', '+880 1911 100106', 1, '2026-09-25 12:37:17');
 
 -- --------------------------------------------------------
 

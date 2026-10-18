@@ -279,12 +279,14 @@ if ($dbUp) {
     );
 
     // ---- login accounts that may be linked to a company
+    // Candidate logins are the roleless customer accounts. The "Client Account"
+    // and "B2B Client Account" roles no longer exist — the customer-model
+    // migration retires them — so they must not be looked up by name here.
     $candidates = db_fetch_all(
-        'SELECT u.UserID, u.FullName, u.Username, r.RoleName, c.ClientID AS LinkedTo
+        'SELECT u.UserID, u.FullName, u.Username, "customer account" AS RoleName, c.ClientID AS LinkedTo
          FROM `user` u
-         JOIN `role` r ON r.RoleID = u.RoleID
          LEFT JOIN client c ON c.UserID = u.UserID
-         WHERE r.RoleName IN ("Client Account", "B2B Client Account")
+         WHERE u.RoleID IS NULL
          ORDER BY u.FullName'
     );
 
@@ -664,16 +666,23 @@ echo admin_lead('Customers &amp; branches', 'A company owns one or more branch o
           <h2 class="report-panel-title">This company on file</h2>
         </div>
         <?php
-        $totals = db_fetch_all(
+        $totals = db_fetch_all(            // One placeholder per subquery: native prepared statements reject a
+            // statement that reuses the same named parameter (SQLSTATE[HY093]).
             'SELECT (SELECT COUNT(*) FROM quotation q JOIN client_branch b ON b.BranchID = q.BranchID
-                      WHERE b.ClientID = :id) AS Quotes,
+                      WHERE b.ClientID = :qid) AS Quotes,
                     (SELECT COUNT(*) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID
-                      WHERE b.ClientID = :id) AS Invoices,
+                      WHERE b.ClientID = :iid) AS Invoices,
                     (SELECT COALESCE(SUM(i.TotalAmount), 0) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID
-                      WHERE b.ClientID = :id) AS Billed,
-                    (SELECT COALESCE(SUM(i.RemainingBalance), 0) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID
-                      WHERE b.ClientID = :id) AS Due',
-            [':id' => (int) $edit['ClientID']]
+                      WHERE b.ClientID = :bid) AS Billed,
+                    (SELECT COALESCE(SUM(i.RemainingBalance), 0) FROM invoice i
+                      JOIN client_branch b ON b.BranchID = i.BranchID
+                      WHERE b.ClientID = :did) AS Due',
+            [
+                ':qid' => (int) $edit['ClientID'],
+                ':iid' => (int) $edit['ClientID'],
+                ':bid' => (int) $edit['ClientID'],
+                ':did' => (int) $edit['ClientID'],
+            ]
         );
         $t = $totals[0] ?? [];
         ?>

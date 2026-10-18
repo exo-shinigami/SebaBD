@@ -98,8 +98,15 @@ $quotationUrl = $canBuy ? 'quotation-request.php?product=' . $productId . '&qty=
             <?php if ($wasPrice > 0): ?>
             <span class="text-muted"><del><?= money($wasPrice) ?></del> <span class="badge text-bg-success"><?= number_format($discount, 0) ?>% off</span></span>
             <?php endif; ?>
-            <span class="stock-line <?= $available > 0 ? 'text-success' : 'text-danger' ?>">
-              <i class="fa-solid <?= $available > 0 ? 'fa-circle-check' : 'fa-triangle-exclamation' ?> me-1"></i><?= htmlspecialchars(stock_label($product, $available)) ?>
+            <?php
+            // "Made to order" is an ordinary serialized-product state, not a
+            // problem, so it stays neutral instead of being flagged in red.
+            $madeToOrder = $available <= 0 && ((int) $product['IsSerialized']) === 1;
+            $stockTone   = $available > 0 ? 'text-success' : ($madeToOrder ? 'text-muted' : 'text-danger');
+            $stockIcon   = $available > 0 ? 'fa-circle-check' : ($madeToOrder ? 'fa-clock' : 'fa-triangle-exclamation');
+            ?>
+            <span class="stock-line <?= $stockTone ?>">
+              <i class="fa-solid <?= $stockIcon ?> me-1"></i><?= htmlspecialchars(stock_label($product, $available)) ?>
             </span>
           </div>
 

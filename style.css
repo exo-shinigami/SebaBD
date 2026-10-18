@@ -660,6 +660,24 @@ a {
     background: var(--surface-soft);
 }
 
+/* KoolReport only adds its own `table-responsive` class when a report asks for
+   it, so the tables it leaves unwrapped — the side-by-side panels, which fit on
+   a desktop — kept pushing the whole page sideways on a phone. Scrolling inside
+   the widget keeps the page itself still, exactly like Bootstrap's wrapper. */
+.koolphp-table {
+    overflow-x: auto;
+}
+
+/* Bootstrap's `.visually-hidden` is absolutely positioned, so inside a table
+   that is wider than the phone it anchors to the *page* instead of the scroll
+   box — the table clips the columns, but those 1px hidden labels still sat at
+   each column's x-position out at ~1080px and dragged the document's scrollable
+   area with them, letting the whole page pan sideways into empty space. Making
+   the wrapper their containing block keeps them inside the scroller. */
+.table-responsive {
+    position: relative;
+}
+
 .report-panel .koolphp-table tbody tr:hover td {
     background: rgba(14, 165, 181, 0.05);
 }
@@ -1353,6 +1371,13 @@ form.is-busy button[type="submit"]::after {
     padding: 0.12rem 0;
 }
 
+/* The item table is the one part of a document that can be wider than a phone:
+   it keeps its columns and scrolls inside the document instead of sliding the
+   whole page sideways. The print stylesheet turns that off so nothing is cut. */
+.document-items-scroll {
+    overflow-x: auto;
+}
+
 .document-items thead th {
     font-size: 0.7rem;
     text-transform: uppercase;
@@ -1478,6 +1503,10 @@ form.is-busy button[type="submit"]::after {
     .report-panel {
         box-shadow: none !important;
         border-color: rgba(28, 36, 48, 0.25) !important;
+    }
+
+    .document-items-scroll {
+        overflow: visible !important;
     }
 
     a[href]::after {

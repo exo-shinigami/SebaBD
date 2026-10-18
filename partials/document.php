@@ -116,6 +116,7 @@ $docNoHtml = (string) ($doc_no ?? '');
                 <?php endif; ?>
             </div>
 
+            <div class="document-items-scroll">
             <table class="table document-items mb-0">
                 <thead>
                     <tr>
@@ -151,6 +152,7 @@ $docNoHtml = (string) ($doc_no ?? '');
                     </tr>
                 </tfoot>
             </table>
+            </div>
 
             <?= (string) ($payments_html ?? '') ?>
 

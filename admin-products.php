@@ -527,12 +527,20 @@ echo admin_lead('Products', 'The sellable catalog. Each product has exactly one 
         </div>
         <?php
         $usage = db_fetch_all(
-            'SELECT (SELECT COUNT(*) FROM order_item     WHERE ProductID = :id) AS OrderLines,
-                    (SELECT COUNT(*) FROM quotation_item WHERE ProductID = :id) AS QuoteLines,
-                    (SELECT COUNT(*) FROM invoice_item   WHERE ProductID = :id) AS InvoiceLines,
-                    (SELECT COUNT(*) FROM po_item        WHERE ProductID = :id) AS PoLines,
-                    (SELECT COUNT(*) FROM product_instance WHERE ProductID = :id) AS Units',
-            [':id' => (int) $edit['ProductID']]
+            // One placeholder per subquery: native prepared statements reject a
+            // statement that reuses the same named parameter (SQLSTATE[HY093]).
+            'SELECT (SELECT COUNT(*) FROM order_item     WHERE ProductID = :oid) AS OrderLines,
+                    (SELECT COUNT(*) FROM quotation_item WHERE ProductID = :qid) AS QuoteLines,
+                    (SELECT COUNT(*) FROM invoice_item   WHERE ProductID = :iid) AS InvoiceLines,
+                    (SELECT COUNT(*) FROM po_item        WHERE ProductID = :pid) AS PoLines,
+                    (SELECT COUNT(*) FROM product_instance WHERE ProductID = :uid) AS Units',
+            [
+                ':oid' => (int) $edit['ProductID'],
+                ':qid' => (int) $edit['ProductID'],
+                ':iid' => (int) $edit['ProductID'],
+                ':pid' => (int) $edit['ProductID'],
+                ':uid' => (int) $edit['ProductID'],
+            ]
         );
         $u = $usage[0] ?? [];
         ?>

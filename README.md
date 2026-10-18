@@ -116,7 +116,9 @@ http://localhost/SebaBD/
 
 On Windows, `mklink /D C:\xampp\htdocs\SebaBD C:\path\to\SebaBD` creates that link without
 duplicating the files. Apache reads `.htaccess` from the folder (XAMPP ships with
-`AllowOverride All`), which is what turns a mistyped address into the friendly `404.php`.
+`AllowOverride All`), which is what turns a mistyped address into the friendly `404.php` —
+via a rewrite, since the `ErrorDocument` line alone only resolves when the project sits at the
+document root.
 
 Or use the PHP development server from the project root — handy while developing, though it
 ignores `.htaccess` (so unknown paths return the server's own message rather than `404.php`):
@@ -127,7 +129,7 @@ C:\xampp\php\php.exe -S 127.0.0.1:8787
 
 ### Sample logins
 
-The dump creates four working accounts — no separate password import is needed:
+The dump creates five working accounts — no separate password import is needed:
 
 | Username | Password | Role | What it demonstrates |
 | --- | --- | --- | --- |
@@ -135,6 +137,7 @@ The dump creates four working accounts — no separate password import is needed
 | `sales` | `sales123` | Sales Manager | Sales, invoice and quotation reports |
 | `inventory` | `stock123` | Inventory Manager | Procurement and stock reports |
 | `client` | `client123` | *(no role — customer)* | Company dashboard: Meghna Infotech's branches, quotations, invoices and receipts |
+| `bijoy` | `bijoy123` | *(no role — customer)* | A second company contact: Bijoy Technologies' own orders and invoices, to show that one customer never sees another's documents |
 
 Roles belong to SebaBD staff only. A customer login — an individual registered through
 `register.php` or a B2B contact registered through `b2b-registration.php` — carries
@@ -882,7 +885,7 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 | `partials/admin-list.php` | Shared back-office list furniture: filters, empty state, pagination, row actions |
 | `partials/header.php` | Shared head, top strip, navigation, live search |
 | `partials/footer.php` | Footer, the confirmation strip used by add-to-basket, Bootstrap JS, AJAX script, flash auto-dismiss |
-| `.htaccess` | Apache rules: `ErrorDocument 404 404.php`, no source/SQL files served, no directory listings, cache and compression headers |
+| `.htaccess` | Apache rules: the friendly 404 (`ErrorDocument 404 404.php` plus a rewrite fallback, because Apache resolves a relative `ErrorDocument` against the *server* document root and so misses `404.php` on a subdirectory install), no source/SQL files served, no directory listings, cache and compression headers |
 | `partials/product-panel.php` | Product grid: heading, count, empty state, cards |
 | `partials/product-card.php` | One product card (used by the grid and by related products) |
 | `style.css` | The single stylesheet, including dashboard and product-detail components |

@@ -256,6 +256,36 @@ function post_success(string $location): void
     exit;
 }
 
+/**
+ * Restrict a user-supplied return path to somewhere inside this site.
+ *
+ * A form may want to bounce the visitor back where they came from (the catalog
+ * grid, a product page). Anything that is not a plain relative path — a full
+ * URL, a protocol-relative //host, a path that climbs out — is refused, so the
+ * value can never turn into an open redirect.
+ *
+ * Lives in helpers.php rather than cart-data.php because the product card uses
+ * it, and the card renders on pages (and AJAX fragments) that never load the
+ * cart library.
+ */
+function cart_return_path(string $candidate, string $default = 'cart.php'): string
+{
+    $candidate = trim($candidate);
+    if ($candidate === '' || str_contains($candidate, "\n") || str_contains($candidate, "\r")) {
+        return $default;
+    }
+    // Deliberately no '#' between the delimiters: PHP reads a delimiter inside a
+    // character class as the end of the pattern, which would break the match.
+    if (!preg_match('~^[A-Za-z0-9_\-./?=&%#]+$~', $candidate)) {
+        return $default;
+    }
+    if (str_starts_with($candidate, '//') || str_contains($candidate, '..') || str_contains($candidate, ':')) {
+        return $default;
+    }
+
+    return $candidate;
+}
+
 /* -------------------------------------------------------- validation */
 
 /**

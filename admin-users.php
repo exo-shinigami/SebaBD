@@ -84,8 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         try {
             $target = db_fetch_all(
+                // LEFT JOIN: a customer login has RoleID = NULL, so an inner
+                // join would find no row and this page would claim the account
+                // does not exist — leaving no customer deactivatable.
                 'SELECT u.UserID, u.Username, u.FullName, r.RoleName
-                 FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+                 FROM `user` u LEFT JOIN `role` r ON r.RoleID = u.RoleID
                  WHERE u.UserID = :id',
                 [':id' => $userId]
             );
@@ -122,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'SELECT u.UserID, u.Username, u.FullName, r.RoleName,
                         (SELECT COUNT(*) FROM `order` o WHERE o.UserID = u.UserID) AS Orders,
                         (SELECT c.ClientID FROM client c WHERE c.UserID = u.UserID LIMIT 1) AS ClientID
-                 FROM `user` u JOIN `role` r ON r.RoleID = u.RoleID
+                 FROM `user` u LEFT JOIN `role` r ON r.RoleID = u.RoleID
                  WHERE u.UserID = :id',
                 [':id' => $userId]
             );

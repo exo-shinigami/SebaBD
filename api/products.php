@@ -11,8 +11,8 @@
  * Every value is returned both raw and pre-formatted (money()/stock_label()),
  * so the browser never has to know about currency or stock rules.
  */
-require_once dirname(__DIR__) . '/helpers.php';
-require_once dirname(__DIR__) . '/catalog-data.php';
+require_once __DIR__ . '/../helpers.php';
+require_once __DIR__ . '/../catalog-data.php';
 
 if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true)) {
     json_response(['ok' => false, 'error' => 'This endpoint is read-only; use GET.'], 405);
@@ -56,10 +56,10 @@ foreach ($products as $product) {
 }
 
 json_response([
-    'ok'        => true,
-    'query'     => $query,
-    'category'  => $categoryId,
-    'count'     => count($results),
-    'more'      => $more,
-    'products'  => $results,
+    'ok'       => true,
+    'query'    => $query,
+    'category' => $categoryId,
+    'count'    => count($results),
+    'more'     => $more,
+    'products' => $results,
 ]);

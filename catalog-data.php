@@ -11,6 +11,14 @@
  * storefront still renders.
  */
 
+// This file is a library, never an endpoint: it declares functions and emits
+// nothing. A few hosts include it before helpers.php, so pull the two
+// dependencies in when they are not already loaded.
+if (!function_exists('db_fetch_all')) {
+    require_once __DIR__ . '/db.php';
+    require_once __DIR__ . '/helpers.php';
+}
+
 /**
  * Image path, deal badge and short blurb for each product, keyed by ProductID.
  *
@@ -201,190 +209,45 @@ function get_featured_products(int $limit = 12): array
 }
 
 /**
- * Units on hand for several products in one round trip.
- *
- * Serialized products track stock through product_instance rows marked
- * 'In Stock'; everything else uses product.StockQty. Returns [ProductID => n].
- *
- * Batched because the AJAX endpoints and the product grid ask for many
- * products at once — one query beats one query per card.
+ * Products in one category, newest ProductID first, with presentation metadata
+ * merged in. Reads live data; falls back to the offline catalogue when the
+ * database is unreachable.
  */
-function stock_counts(array $products): array
+function get_products_by_category(int $categoryId, int $limit = 50): array
 {
-    $counts     = [];
-    $serialized = [];
-
-    foreach ($products as $product) {
-        $id = (int) ($product['ProductID'] ?? 0);
-        if ($id <= 0) {
-            continue;
-        }
-        if (!empty($product['IsSerialized'])) {
-            $serialized[$id] = $id;
-        } else {
-            $counts[$id] = (int) ($product['StockQty'] ?? 0);
-        }
-    }
-
-    if ($serialized) {
-        $params = [];
-        $holders = [];
-        foreach (array_values($serialized) as $i => $id) {
-            $holders[] = ':pid' . $i;
-            $params[':pid' . $i] = $id;
-        }
-
-        $rows = db_fetch_all(
-            'SELECT ProductID, COUNT(*) AS n
-             FROM product_instance
-             WHERE Status = \'In Stock\' AND ProductID IN (' . implode(', ', $holders) . ')
-             GROUP BY ProductID',
-            $params
-        );
-        foreach ($rows as $row) {
-            $counts[(int) $row['ProductID']] = (int) $row['n'];
-        }
-        // A serialized product with no instances at all is simply out of stock.
-        foreach ($serialized as $id) {
-            $counts[$id] ??= 0;
-        }
-    }
-
-    return $counts;
-}
-
-/**
- * The storefront's wording for a product's stock, given its units on hand.
- * Separate from the query so every page and endpoint says the same thing.
- */
-function stock_label(array $product, int $available): string
-{
-    if (!empty($product['IsSerialized'])) {
-        return $available > 0 ? $available . ' in stock' : 'Made to order';
-    }
-
-    if ($available > 10) return 'In stock';
-    if ($available > 0)  return 'Only ' . $available . ' left';
-
-    return 'Out of stock';
-}
-
-/**
- * Human stock line for a single product (the storefront cards use this).
- */
-function stock_line(array $product): string
-{
-    $counts = stock_counts([$product]);
-
-    return stock_label($product, $counts[(int) ($product['ProductID'] ?? 0)] ?? 0);
-}
-
-/**
- * Products matching a free-text query and/or a category, shaped exactly like
- * get_featured_products() so the same card partial renders both.
- *
- * Used by index.php for storefront search and by api/products.php for the
- * live search suggestions.
- */
-function search_products(string $query = '', int $categoryId = 0, int $limit = 24): array
-{
-    $query = trim($query);
-    $limit = max(1, min(60, $limit));
-
-    $where  = [];
-    $params = [];
-
-    if ($query !== '') {
-        // Escape LIKE's own wildcards so "100%" doesn't match everything.
-        $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $query) . '%';
-        $where[] = '(p.ProductName LIKE :qName OR p.Brand LIKE :qBrand
-                     OR p.Model LIKE :qModel OR c.CategoryName LIKE :qCat)';
-        $params[':qName']  = $like;
-        $params[':qBrand'] = $like;
-        $params[':qModel'] = $like;
-        $params[':qCat']   = $like;
-    }
-
-    if ($categoryId > 0) {
-        $where[]           = 'p.CategoryID = :cid';
-        $params[':cid']    = $categoryId;
-    }
-
+    $limit = max(1, min(100, $limit)); // sanitized — interpolated, not bound
     $rows = db_fetch_all(
-        'SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
-                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths, c.CategoryName
+        "SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                c.CategoryName
          FROM product p
          JOIN category c ON c.CategoryID = p.CategoryID
-         ' . ($where ? 'WHERE ' . implode(' AND ', $where) : '') . '
-         ORDER BY c.CategoryID, p.ProductName
-         LIMIT ' . $limit,
-        $params
+         WHERE p.CategoryID = :cid
+         ORDER BY p.ProductID DESC
+         LIMIT $limit",
+        [':cid' => $categoryId]
     );
 
     $products = [];
     foreach ($rows as $row) {
-        $meta = product_meta()[(int) $row['ProductID']] ?? [
+        $products[] = array_merge($row, product_meta()[(int) $row['ProductID']] ?? [
             'image' => null,
             'alt'   => $row['ProductName'],
             'badge' => null,
             'blurb' => '',
             'sale'  => null,
-        ];
-        $products[] = array_merge($row, $meta);
+        ]);
     }
 
     return $products;
 }
 
 /**
- * One product with its category and vendor, shaped like get_featured_products()
- * plus VendorID / VendorName / VendorLocation / VendorPhone.
- * Returns null when the id does not exist (product.php then shows a friendly
- * "not found" panel instead of an error).
+ * Products related to one already on the page (same category, different item).
  */
-function get_product(int $productId): ?array
+function related_products(int $productId, int $categoryId, int $limit = 4): array
 {
-    if ($productId <= 0) {
-        return null;
-    }
-
-    $rows = db_fetch_all(
-        'SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
-                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
-                p.CategoryID, c.CategoryName,
-                v.VendorID, v.VendorName, v.Location AS VendorLocation,
-                v.ContactPhone AS VendorPhone
-         FROM product p
-         JOIN category c ON c.CategoryID = p.CategoryID
-         JOIN vendor   v ON v.VendorID   = p.VendorID
-         WHERE p.ProductID = :id',
-        [':id' => $productId]
-    );
-
-    if (!$rows) {
-        return null;
-    }
-
-    return array_merge($rows[0], product_meta()[$productId] ?? [
-        'image' => null,
-        'alt'   => $rows[0]['ProductName'],
-        'badge' => null,
-        'blurb' => '',
-        'sale'  => null,
-    ]);
-}
-
-/**
- * Other products in the same category, for the "Related products" strip on the
- * product page. Same shape as get_featured_products().
- */
-function related_products(int $productId, int $categoryId, int $limit = 3): array
-{
-    $limit = max(1, min(12, $limit));
-    if ($categoryId <= 0) {
-        return [];
-    }
-
+    $limit = max(1, min(12, $limit)); // sanitized — interpolated, not bound
     $rows = db_fetch_all(
         'SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
                 p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
@@ -441,4 +304,239 @@ function category_name(int $categoryId): string
     );
 
     return (string) ($rows[0]['CategoryName'] ?? '');
+}
+
+/**
+ * One product row by id, with presentation metadata merged in. Returns an
+ * empty array when the product does not exist or the database is unreachable.
+ *
+ * Shape: ProductID, CategoryID, ProductName, Brand, Model, StandardPrice,
+ *        IsSerialized, StockQty, DefaultWarrantyMonths, CategoryName,
+ *        VendorName, VendorLocation, plus the keys from product_meta() when
+ *        present (image, alt, badge, blurb, sale).
+ *
+ * CategoryID and the vendor fields are part of the row because the detail page
+ * links back into the category and prints the supplier; leaving them out made
+ * the breadcrumb point at category 0 and the related-products strip empty.
+ */
+function get_product(int $productId): array
+{
+    if ($productId <= 0) {
+        return [];
+    }
+
+    $rows = db_fetch_all(
+        "SELECT p.ProductID, p.CategoryID, p.ProductName, p.Brand, p.Model,
+                p.StandardPrice, p.IsSerialized, p.StockQty,
+                p.DefaultWarrantyMonths, c.CategoryName,
+                v.VendorName, v.Location AS VendorLocation
+         FROM product p
+         JOIN category c ON c.CategoryID = p.CategoryID
+         JOIN vendor   v ON v.VendorID   = p.VendorID
+         WHERE p.ProductID = :id",
+        [':id' => $productId]
+    );
+
+    if (!$rows) {
+        return [];
+    }
+
+    $row = $rows[0];
+    $meta = product_meta()[(int) $row['ProductID']] ?? [
+        'image' => null,
+        'alt'   => $row['ProductName'],
+        'badge' => null,
+        'blurb' => '',
+        'sale'  => null,
+    ];
+
+    return array_merge($row, $meta);
+}
+
+/**
+ * Units on hand, keyed by ProductID: [ProductID => available count].
+ *
+ * A serialized product is counted from its product_instance rows (Status
+ * 'In Stock'), because product.StockQty stays 0 for those — the units are the
+ * stock. Everything else uses product.StockQty. The numbers are read from the
+ * database here rather than from the rows the caller passed in, so a caller
+ * that selected only the display columns still gets the right answer.
+ */
+function stock_counts(array $products): array
+{
+    if (!$products) {
+        return [];
+    }
+
+    $ids = [];
+    foreach ($products as $p) {
+        $id = (int) ($p['ProductID'] ?? 0);
+        if ($id > 0) {
+            $ids[$id] = $id;
+        }
+    }
+
+    if (!$ids) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $params       = array_values($ids);
+
+    $rows = db_fetch_all(
+        "SELECT ProductID, IsSerialized, StockQty FROM product WHERE ProductID IN ($placeholders)",
+        $params
+    );
+
+    $serialized = [];
+    $bulk       = [];
+    foreach ($rows as $row) {
+        $id = (int) $row['ProductID'];
+        if ((int) $row['IsSerialized'] === 1) {
+            $serialized[$id] = 0;
+        } else {
+            $bulk[$id] = (int) $row['StockQty'];
+        }
+    }
+
+    if ($serialized) {
+        $marks = implode(',', array_fill(0, count($serialized), '?'));
+        $units = db_fetch_all(
+            "SELECT ProductID, COUNT(*) AS n FROM product_instance
+             WHERE Status = 'In Stock' AND ProductID IN ($marks)
+             GROUP BY ProductID",
+            array_keys($serialized)
+        );
+        foreach ($units as $unit) {
+            $serialized[(int) $unit['ProductID']] = (int) $unit['n'];
+        }
+    }
+
+    $result = [];
+    foreach ($ids as $id) {
+        $result[$id] = $serialized[$id] ?? $bulk[$id] ?? 0;
+    }
+
+    return $result;
+}
+
+/**
+ * Human-readable stock line for one product card. Receives the product row and
+ * the available unit count from stock_counts() and returns a short label:
+ * "In stock", "Low stock", "Made to order", or "Out of stock".
+ *
+ * A serialized product with no units on hand is not out of stock — it is
+ * ordered per device and its warranty is tracked per serial number, which is
+ * what "Made to order" tells the shopper.
+ */
+function stock_label(array $product, int $available): string
+{
+    if ((int) ($product['IsSerialized'] ?? 0) === 1) {
+        return $available > 0 ? $available . ' in stock' : 'Made to order';
+    }
+
+    if ($available <= 0) {
+        return 'Out of stock';
+    }
+
+    if ($available <= 5) {
+        return 'Low stock';
+    }
+
+    return 'In stock';
+}
+
+/**
+ * Free-text product search for the header search box. Searches product name,
+ * brand and model so a customer can find items without typing the full name.
+ *
+ * When the database is unavailable this falls back to a substring match over
+ * the offline product catalogue.
+ */
+function search_products(string $query, ?int $categoryId, int $limit): array
+{
+    $query = trim($query);
+    $limit = max(1, min(100, $limit)); // sanitized — interpolated, not bound
+
+    if ($query === '') {
+        if ($categoryId && $categoryId > 0) {
+            return get_products_by_category($categoryId, $limit);
+        }
+
+        return get_featured_products($limit);
+    }
+
+    // Live search against the real catalogue. One placeholder per column: the
+    // connection runs native prepared statements (EMULATE_PREPARES off), and
+    // MySQL rejects a statement that names the same placeholder twice with
+    // SQLSTATE[HY093], which made every search silently fall back offline.
+    $like = '%' . $query . '%';
+    $rows = db_fetch_all(
+        "SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                c.CategoryName
+         FROM product p
+         JOIN category c ON c.CategoryID = p.CategoryID
+         WHERE (p.ProductName LIKE :q1 OR p.Brand LIKE :q2 OR p.Model LIKE :q3)
+           " . ($categoryId && $categoryId > 0 ? "AND p.CategoryID = :cid" : "") . "
+         ORDER BY p.ProductID
+         LIMIT $limit",
+        array_merge(
+            [':q1' => $like, ':q2' => $like, ':q3' => $like],
+            $categoryId && $categoryId > 0 ? [':cid' => $categoryId] : []
+        )
+    );
+
+    $products = [];
+    foreach ($rows as $row) {
+        $products[] = array_merge($row, product_meta()[(int) $row['ProductID']] ?? [
+            'image' => null,
+            'alt'   => $row['ProductName'],
+            'badge' => null,
+            'blurb' => '',
+            'sale'  => null,
+        ]);
+    }
+
+    if ($products) {
+        return $products;
+    }
+
+    // Fallback: substring match over the offline catalogue so the search box
+    // still returns something when the database is down.
+    $q = mb_strtolower($query);
+    $matched = [];
+    foreach (product_meta() as $id => $meta) {
+        if (mb_strpos(mb_strtolower($meta['alt'] ?? ''), $q) !== false) {
+            $matched[$id] = $meta;
+        }
+    }
+
+    if ($matched) {
+        $fallbackRows = db_fetch_all(
+            "SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                    p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                    c.CategoryName
+             FROM product p
+             JOIN category c ON c.CategoryID = p.CategoryID
+             WHERE p.ProductID IN (" . implode(',', array_keys($matched)) . ")
+             ORDER BY p.ProductID"
+        );
+
+        $byId = [];
+        foreach ($fallbackRows as $row) {
+            $byId[(int) $row['ProductID']] = $row;
+        }
+
+        $products = [];
+        foreach ($matched as $id => $meta) {
+            $row = $byId[$id] ?? [];
+            $products[] = array_merge($row, $meta);
+        }
+
+        return array_slice($products, 0, $limit);
+    }
+
+    // Nothing matched anywhere — empty is the honest response.
+    return [];
 }
