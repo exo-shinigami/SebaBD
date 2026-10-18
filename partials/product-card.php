@@ -29,7 +29,7 @@ $returnUrl = cart_return_path($_SERVER['REQUEST_URI'] ?? 'index.php', 'index.php
   <div class="card product-card h-100">
     <?= product_image_html($product, 'card-img-top product-image') ?>
     <div class="card-body d-flex flex-column">
-      <div class="d-flex justify-content-between align-items-start mb-2">
+      <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
         <h3 class="h5 card-title mb-0"><a class="product-title-link" href="<?= $productUrl ?>"><?= htmlspecialchars($product['ProductName']) ?></a></h3>
         <?php if (!empty($product['badge'])): ?>
         <span class="badge text-bg-dark"><?= htmlspecialchars($product['badge']) ?></span>

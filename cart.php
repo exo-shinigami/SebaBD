@@ -31,9 +31,9 @@ $errors  = [];
 $notice  = '';
 $isStaff = is_staff_user($user);
 
-// Staff may look at the basket page but never write to it (add, update,
-// clear or checkout): ordering belongs to customers. A constructed POST
-// from a staff session gets a 403 before it touches the database.
+// Ordering belongs to customers: a staff session gets a 403 for the page and
+// for every write path (add, update, clear or checkout), so a constructed POST
+// never reaches the database. The storefront hides the basket links to match.
 if ($isStaff && $_SERVER['REQUEST_METHOD'] === 'POST') {
     refuse_staff_order($user);
 }
@@ -439,18 +439,7 @@ $page_title = 'Your basket';
           </div>
           <?php endif; ?>
 
-          <?php if ($user && is_staff_user($user)): ?>
-          <div class="alert alert-warning small">
-            <i class="fa-solid fa-building-shield me-1"></i>
-            Staff accounts do not shop here. You are signed in as
-            <strong><?= htmlspecialchars((string) ($user['RoleName'] ?? 'staff')) ?></strong> — SebaBD buys stock
-            through <a href="admin-purchase-orders.php">purchase orders</a>, not the storefront.
-          </div>
-          <?php endif; ?>
-
-          <?php if ($isStaff): ?>
-          <?php /* the staff notice above replaces checkout entirely */ ?>
-          <?php elseif (!$user): ?>
+          <?php if (!$user): ?>
           <div class="alert alert-light border small">
             <i class="fa-solid fa-user-lock me-1"></i>You are not signed in. Your basket is kept — sign in
             and you will come straight back here to finish.

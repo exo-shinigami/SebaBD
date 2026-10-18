@@ -283,7 +283,7 @@ if ($dbUp) {
     // and "B2B Client Account" roles no longer exist — the customer-model
     // migration retires them — so they must not be looked up by name here.
     $candidates = db_fetch_all(
-        'SELECT u.UserID, u.FullName, u.Username, "customer account" AS RoleName, c.ClientID AS LinkedTo
+        'SELECT u.UserID, u.FullName, u.Username, \'Customer account\' AS RoleName, c.ClientID AS LinkedTo
          FROM `user` u
          LEFT JOIN client c ON c.UserID = u.UserID
          WHERE u.RoleID IS NULL
@@ -487,7 +487,7 @@ echo admin_lead('Customers &amp; branches', 'A company owns one or more branch o
             <a class="text-decoration-none fw-semibold" href="admin-customers.php?action=branch&client=<?= (int) $edit['ClientID'] ?>&id=<?= (int) $branch['BranchID'] ?>">
               <?= htmlspecialchars($branch['BranchName']) ?>
             </a>
-            <small class="text-muted d-block"><?= (int) $branch['Quotes'] ?> quotations · <?= (int) $branch['Invoices'] ?> invoices</small>
+            <small class="text-muted d-block"><?= (int) $branch['Quotes'] ?> quotation<?= (int) $branch['Quotes'] === 1 ? '' : 's' ?> · <?= (int) $branch['Invoices'] ?> invoice<?= (int) $branch['Invoices'] === 1 ? '' : 's' ?></small>
           </li>
           <?php endforeach; ?>
           <?php if (!$branches): ?>
@@ -636,8 +636,8 @@ echo admin_lead('Customers &amp; branches', 'A company owns one or more branch o
                   <?php endif; ?>
                 </td>
                 <td class="small">
-                  <a class="text-decoration-none" href="admin-quotations.php?branch=<?= (int) $branch['BranchID'] ?>"><?= (int) $branch['Quotes'] ?> quotations</a><br>
-                  <a class="text-decoration-none" href="admin-invoices.php?branch=<?= (int) $branch['BranchID'] ?>"><?= (int) $branch['Invoices'] ?> invoices</a>
+                  <a class="text-decoration-none" href="admin-quotations.php?branch=<?= (int) $branch['BranchID'] ?>"><?= (int) $branch['Quotes'] ?> quotation<?= (int) $branch['Quotes'] === 1 ? '' : 's' ?></a><br>
+                  <a class="text-decoration-none" href="admin-invoices.php?branch=<?= (int) $branch['BranchID'] ?>"><?= (int) $branch['Invoices'] ?> invoice<?= (int) $branch['Invoices'] === 1 ? '' : 's' ?></a>
                 </td>
                 <td class="admin-actions-cell">
                   <a class="btn btn-sm btn-outline-secondary" href="admin-customers.php?action=branch&client=<?= (int) $edit['ClientID'] ?>&id=<?= (int) $branch['BranchID'] ?>">
@@ -666,8 +666,9 @@ echo admin_lead('Customers &amp; branches', 'A company owns one or more branch o
           <h2 class="report-panel-title">This company on file</h2>
         </div>
         <?php
-        $totals = db_fetch_all(            // One placeholder per subquery: native prepared statements reject a
-            // statement that reuses the same named parameter (SQLSTATE[HY093]).
+        // One placeholder per subquery: native prepared statements reject a
+        // statement that reuses the same named parameter (SQLSTATE[HY093]).
+        $totals = db_fetch_all(
             'SELECT (SELECT COUNT(*) FROM quotation q JOIN client_branch b ON b.BranchID = q.BranchID
                       WHERE b.ClientID = :qid) AS Quotes,
                     (SELECT COUNT(*) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID

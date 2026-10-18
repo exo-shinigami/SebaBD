@@ -45,9 +45,13 @@ $user = current_user();
               <a class="text-decoration-none text-white" href="register.php">Create account</a>
               <a class="text-decoration-none text-white" href="b2b-registration.php">B2B registration</a>
               <?php endif; ?>
+              <?php /* Customer actions. Staff are refused by these pages, so the
+                       links are hidden rather than offered as three dead ends. */ ?>
+              <?php if (!is_staff_user($user)): ?>
               <a class="text-decoration-none text-white" href="order.php">Quick order</a>
               <a class="text-decoration-none text-white" href="cart.php">Basket<?= cart_count() > 0 ? ' (' . cart_count() . ')' : '' ?></a>
               <a class="text-decoration-none text-white" href="quotation-request.php">Request quotation</a>
+              <?php endif; ?>
             </div>
           </div>
         </nav>
@@ -85,11 +89,13 @@ $user = current_user();
                 <div class="search-suggestions d-none" id="search-suggestions" role="listbox" aria-label="Product suggestions"></div>
               </form>
               <?php $cartCount = cart_count(); ?>
+              <?php if (!is_staff_user($user)): ?>
               <a href="cart.php" class="btn btn-accent ms-lg-3 mt-3 mt-lg-0 position-relative cart-btn"
                  aria-label="Basket: <?= $cartCount ?> item<?= $cartCount === 1 ? '' : 's' ?>">
                 <i class="fa-solid fa-cart-shopping"></i>
                 <span class="cart-count badge rounded-pill text-bg-light <?= $cartCount > 0 ? '' : 'd-none' ?>"><?= $cartCount ?></span>
               </a>
+              <?php endif; ?>
             </div>
           </div>
         </nav>

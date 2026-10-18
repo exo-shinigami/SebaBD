@@ -941,7 +941,7 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
                 <td colspan="3" class="text-end">
                   <span class="text-muted fw-normal small">sum of lines</span>
                 </td>
-                <td class="text-end" colspan="2"><?= money(array_sum(array_map(fn($l) => (float) $l['Quantity'], $invoiceLines))) ?> units</td>
+                <td class="text-end" colspan="2"><?= number_format((int) array_sum(array_map(fn($l) => (int) $l['Quantity'], $invoiceLines))) ?> units</td>
                 <td class="text-end"><?= money(array_sum(array_map(fn($l) => (float) $l['TotalPrice'], $invoiceLines))) ?></td>
               </tr>
               <tr>

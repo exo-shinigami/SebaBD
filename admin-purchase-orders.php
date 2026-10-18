@@ -528,7 +528,7 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
             </p>
           </div>
           <span class="report-badge report-badge-info">
-            <?= (int) $order['Lines'] ?> line(s) · <?= number_format((int) $order['Units']) ?> units
+            <?= (int) $order['Lines'] ?> line<?= (int) $order['Lines'] === 1 ? '' : 's' ?> · <?= number_format((int) $order['Units']) ?> unit<?= (int) $order['Units'] === 1 ? '' : 's' ?>
           </span>
         </div>
 
