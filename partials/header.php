@@ -27,30 +27,37 @@ $user = current_user();
 
       <!-- CSS File -->
        <link rel="stylesheet" href="style.css">
+       <?php if (basename($_SERVER['SCRIPT_NAME']) === 'diagnostic.php'): ?>
+       <link rel="stylesheet" href="assets/diagnostic.css">
+       <?php endif; ?>
 </head>
     <body class="app-shell">
       <div class="container-fluid px-0">
         <nav class="top-strip py-2">
-          <div class="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
-            <span class="small text-white-50"><i class="fa-solid fa-truck-fast me-2"></i>Nationwide delivery all over Bangladesh</span>
-            <div class="d-flex gap-3 small">
+          <div class="container d-flex flex-wrap justify-content-center justify-content-md-between align-items-center gap-2">
+            <span class="small text-white-50 d-none d-md-inline"><i class="fa-solid fa-truck-fast me-2"></i>Nationwide delivery all over Bangladesh</span>
+            <!-- The strip wraps as whole links on a phone: without text-nowrap a
+                 narrow screen broke "Sign in" across two lines and turned the
+                 bar into a wall of fragments. Long labels stay in the
+                 hamburger menu, which carries the same destinations. -->
+            <div class="d-flex flex-wrap justify-content-center align-items-center column-gap-3 row-gap-1 small top-strip-links">
               <?php if ($user): ?>
-              <a class="text-decoration-none text-white" href="account.php" title="My account"><i class="fa-solid fa-user me-1"></i><?= htmlspecialchars($user['FullName']) ?> (<?= htmlspecialchars($user['RoleName']) ?>)</a>
+              <a class="text-decoration-none text-white text-nowrap" href="account.php" title="My account"><i class="fa-solid fa-user me-1"></i><?= htmlspecialchars($user['FullName']) ?><?= $user['RoleName'] ? ' (' . htmlspecialchars($user['RoleName']) . ')' : '' ?></a>
               <?php if (is_staff_user($user)): ?>
-              <a class="text-decoration-none text-white" href="admin.php"><i class="fa-solid fa-sliders me-1"></i>Back office</a>
+              <a class="text-decoration-none text-white text-nowrap" href="admin.php"><i class="fa-solid fa-sliders me-1"></i>Back office</a>
               <?php endif; ?>
-              <a class="text-decoration-none text-white" href="logout.php">Logout</a>
+              <a class="text-decoration-none text-white text-nowrap" href="logout.php">Logout</a>
               <?php else: ?>
-              <a class="text-decoration-none text-white" href="login.php">Sign in</a>
-              <a class="text-decoration-none text-white" href="register.php">Create account</a>
-              <a class="text-decoration-none text-white" href="b2b-registration.php">B2B registration</a>
+              <a class="text-decoration-none text-white text-nowrap" href="login.php">Sign in</a>
+              <a class="text-decoration-none text-white text-nowrap d-none d-sm-inline" href="register.php">Create account</a>
+              <a class="text-decoration-none text-white text-nowrap d-none d-sm-inline" href="b2b-registration.php">B2B registration</a>
               <?php endif; ?>
               <?php /* Customer actions. Staff are refused by these pages, so the
                        links are hidden rather than offered as three dead ends. */ ?>
               <?php if (!is_staff_user($user)): ?>
-              <a class="text-decoration-none text-white" href="order.php">Quick order</a>
-              <a class="text-decoration-none text-white" href="cart.php">Basket<?= cart_count() > 0 ? ' (' . cart_count() . ')' : '' ?></a>
-              <a class="text-decoration-none text-white" href="quotation-request.php">Request quotation</a>
+              <a class="text-decoration-none text-white text-nowrap" href="order.php">Quick order</a>
+              <a class="text-decoration-none text-white text-nowrap" href="cart.php">Basket<?= cart_count() > 0 ? ' (' . cart_count() . ')' : '' ?></a>
+              <a class="text-decoration-none text-white text-nowrap d-none d-sm-inline" href="quotation-request.php">Request quotation</a>
               <?php endif; ?>
             </div>
           </div>
@@ -77,6 +84,16 @@ $user = current_user();
                 <?php endif; ?>
                 <?php if (is_staff_user($user)): ?>
                 <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'reports' ? 'active' : '' ?>" <?= $active_nav === 'reports' ? 'aria-current="page"' : '' ?> href="reports.php">Reports</a></li>
+                <?php endif; ?>
+                <!-- The service links live in the top strip on a wide screen and
+                     disappear from it on a phone, so the collapsed menu keeps
+                     them reachable instead of stranding the destinations. -->
+                <?php if (!is_staff_user($user)): ?>
+                <li class="nav-item d-sm-none"><a class="nav-link" href="quotation-request.php">Request quotation</a></li>
+                <?php endif; ?>
+                <li class="nav-item d-sm-none"><a class="nav-link" href="b2b-registration.php">B2B registration</a></li>
+                <?php if (!$user): ?>
+                <li class="nav-item d-sm-none"><a class="nav-link" href="register.php">Create account</a></li>
                 <?php endif; ?>
               </ul>
               <!-- Live suggestions are filled by assets/ajax.js from api/products.php;

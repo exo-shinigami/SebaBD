@@ -58,7 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors[] = "That $field is already registered. Try signing in instead.";
             }
         } catch (Throwable $e) {
-            $errors[] = 'Could not check for duplicate accounts.';
+            // Do not throw away the diagnostic here either: if the duplicate
+            // check itself fails, the registration attempt will continue to the
+            // insert step, where the same database problem will usually fail
+            // again. Keep the message user-facing, but allow the real reason
+            // out when debugging is enabled.
+            $errors[] = 'Could not check for duplicate accounts.'
+                . (APP_DEBUG ? ' ' . $e->getMessage() : '');
         }
 
         if (!$errors) {
@@ -80,8 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // The individual's customer record: who documents are prepared
                 // for. Individuals have no branch — branches belong to B2B
-                // companies only. Also the backfill the older logins did
-                // through database/migrate-customer-model.sql.
+                // companies only.
                 $clientId = next_id($pdo, 'client', 'ClientID');
                 $pdo->prepare(
                     "INSERT INTO client (ClientID, UserID, CompanyName, ContactPerson, Email, Phone, Address, AccountType)
@@ -100,10 +105,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_id'] = $userId; // log the new user straight in
                 flash_set('success', 'Welcome to SebaBD, ' . $fullName . '! Your account is ready.');
                 // AJAX callers get {ok:true, redirect:…} instead of a 302.
-                post_success('index.php');
+                // A new customer lands on the dashboard: it shows the account,
+                // the basket shortcut and what happens next, instead of
+                // dropping them back on the shopfront with no orientation.
+                post_success('dashboard.php');
             } catch (PDOException $e) {
-                if ($pdo->inTransaction()) $pdo->rollBack();
-                $errors[] = 'Could not create the account. ' . (APP_DEBUG ? $e->getMessage() : 'Please try again.');
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+
+                // Tell the user where the database refused the insert, without
+                // leaking raw SQL in production. The application currently
+                // creates each customer as two rows (user, then client), so the
+                // most useful diagnostic is which of those two statements actually
+                // failed.
+                $insertedUser = false;
+                try {
+                    $insertedUser = (bool) db_fetch_all(
+                        'SELECT UserID FROM `user` WHERE UserID = :id LIMIT 1',
+                        [':id' => $userId]
+                    );
+                } catch (Throwable $probeError) {
+                    // If even that probe fails, treat the user row as not
+                    // inserted for diagnostic purposes.
+                    $insertedUser = false;
+                }
+
+                if ($insertedUser) {
+                    $errors[] = 'Could not create your customer record.'
+                        . (APP_DEBUG ? ' ' . $e->getMessage() : ' Please try again.');
+                } else {
+                    $errors[] = 'Could not create your account.'
+                        . (APP_DEBUG ? ' ' . $e->getMessage() : ' Please try again.');
+                }
             }
         }
     }

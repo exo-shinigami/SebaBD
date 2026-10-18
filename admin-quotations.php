@@ -19,7 +19,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-quotations.php');
 $dbUp   = db() !== null;
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'new', 'edit', 'view']);
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 
@@ -70,10 +70,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             if (!in_array($status, quotation_statuses(), true)) {
                 $errors[] = 'Choose one of the listed quotation statuses.';
-            } elseif ($status === 'Accepted' && db_count('invoice', 'QuotationNo = :id', [':id' => $quoteId]) > 0) {
-                // Already invoiced: keep the recorded decision from drifting.
-                flash_set('success', 'Quotation #' . $quoteId . ' is already invoiced.');
-                post_success('admin-quotations.php');
+            } elseif (db_count('invoice', 'QuotationNo = :id', [':id' => $quoteId]) > 0) {
+                // An invoiced quotation is the source document of a live bill:
+                // its decision is settled and must not drift afterwards.
+                $errors[] = 'Quotation #' . $quoteId . ' has already been invoiced, so its status is locked. '
+                          . 'The invoice is the document of record now.';
             } else {
                 $quote = db_fetch_all('SELECT QuotationNo, Status FROM quotation WHERE QuotationNo = :id', [':id' => $quoteId]);
                 if (!$quote) {
@@ -90,6 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'list';
     } else {
         $editId     = post_int('quotation_no');
+        // Editing a quotation that has an invoice would change the document the
+        // bill was built from while the invoice keeps the old lines. Lock it.
+        if ($editId > 0 && db_count('invoice', 'QuotationNo = :id', [':id' => $editId]) > 0) {
+            $errors[] = 'Quotation #' . $editId . ' has already been invoiced, so its lines and prices are locked. '
+                      . 'Delete the invoice first if the sale really has to be corrected.';
+        }
         $clientId   = post_int('client_id');
         $branchId   = post_int('branch_id');
         $subject    = post_str('subject');
@@ -335,7 +342,8 @@ if ($dbUp) {
 
     if ($action === 'view' || $action === 'edit') {
         $found = db_fetch_all(
-            'SELECT q.QuotationNo, q.BranchID, q.ClientID, q.QuotationDate, q.Subject, q.TotalAmount,
+            'SELECT q.QuotationNo, q.BranchID, q.ClientID, q.QuotationDate, q.Subject,
+                    q.ContactName, q.ContactEmail, q.ContactPhone, q.TotalAmount,
                     q.AmountInWords, q.Status,
                     b.BranchName, b.BranchAddress, b.ContactNo,
                     c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address, c.AccountType
@@ -365,6 +373,14 @@ if ($dbUp) {
             [':id' => $id]
         );
         $invoiceFor = $invoiceFor[0] ?? null;
+
+        // Editing must go through the POST guard too: a bookmark or the browser's
+        // Back button should not reopen a locked document.
+        if ($action === 'edit' && $invoiceFor !== null) {
+            flash_set('error', 'Quotation #' . $id . ' has already been invoiced, so its lines and prices are locked.');
+            header('Location: admin-quotations.php?action=view&id=' . $id);
+            exit;
+        }
     }
 
     if ($action === 'new') {
@@ -389,11 +405,13 @@ if ($dbUp) {
     }
     if ($search !== '') {
         $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
-        $where[] = '(q.Subject LIKE :q1 OR c.CompanyName LIKE :q2 OR b.BranchName LIKE :q3 OR q.QuotationNo = :q4)';
+        $where[] = '(q.Subject LIKE :q1 OR c.CompanyName LIKE :q2 OR b.BranchName LIKE :q3
+                     OR q.ContactName LIKE :q4 OR q.QuotationNo = :q5)';
         $params[':q1'] = $like;
         $params[':q2'] = $like;
         $params[':q3'] = $like;
-        $params[':q4'] = (int) $search;
+        $params[':q4'] = $like;
+        $params[':q5'] = (int) $search;
     }
     $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
     $from     = ' FROM quotation q
@@ -404,7 +422,7 @@ if ($dbUp) {
     $quotePage = paginate((int) ($countRow[0]['n'] ?? 0), 20);
 
     $rows = db_fetch_all(
-        'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.TotalAmount, q.Status, q.BranchID, q.ClientID,
+        'SELECT q.QuotationNo, q.QuotationDate, q.Subject, q.ContactName, q.TotalAmount, q.Status, q.BranchID, q.ClientID,
                 b.BranchName, c.CompanyName, c.AccountType,
                 (SELECT COUNT(*) FROM quotation_item qi WHERE qi.QuotationNo = q.QuotationNo) AS `Lines`,
                 (SELECT i.InvoiceNo FROM invoice i WHERE i.QuotationNo = q.QuotationNo) AS InvoiceNo'
@@ -523,10 +541,13 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
                    . '<i class="fa-solid fa-eye"></i><span class="visually-hidden">Open</span></a> ';
 
           if ($row['InvoiceNo'] === null) {
+              $convertible = !in_array((string) $row['Status'], ['Rejected', 'Expired'], true);
               $actions .= '<a class="btn btn-sm btn-outline-secondary" href="admin-quotations.php?action=edit&id=' . (int) $row['QuotationNo'] . '" title="Edit">'
                         . '<i class="fa-solid fa-pen"></i><span class="visually-hidden">Edit</span></a> '
-                        . '<a class="btn btn-sm btn-outline-dark" href="admin-invoices.php?action=new&from_quotation=' . (int) $row['QuotationNo'] . '" title="Convert to invoice">'
-                        . '<i class="fa-solid fa-file-invoice-dollar"></i><span class="visually-hidden">Invoice</span></a> '
+                        . ($convertible
+                            ? '<a class="btn btn-sm btn-outline-dark" href="admin-invoices.php?action=new&from_quotation=' . (int) $row['QuotationNo'] . '" title="Convert to invoice">'
+                              . '<i class="fa-solid fa-file-invoice-dollar"></i><span class="visually-hidden">Invoice</span></a> '
+                            : '')
                         . '<form method="post" action="admin-quotations.php" class="d-inline"'
                         . ' onsubmit="return confirm(\'Delete quotation #' . (int) $row['QuotationNo'] . '?\');">'
                         . csrf_field()
@@ -551,7 +572,11 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
                       ? htmlspecialchars((string) $row['BranchName'])
                       : ($row['ClientID'] !== null ? 'individual — no branch' : '—'))
                   . '</small>',
-              htmlspecialchars((string) $row['Subject']),
+              htmlspecialchars((string) $row['Subject'])
+                  . (!empty($row['ContactName'])
+                      ? '<small class="d-block text-muted"><i class="fa-solid fa-user me-1"></i>'
+                        . htmlspecialchars((string) $row['ContactName']) . '</small>'
+                      : ''),
               (int) $row['Lines'],
               '<span class="admin-line-total">' . money($row['TotalAmount']) . '</span>',
               status_badge((string) $row['Status'])
@@ -593,6 +618,18 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
               <?= $branchOriginBadge((int) $quote['BranchID']) ?>
               · <?= format_date($quote['QuotationDate']) ?>
             </p>
+            <?php if (!empty($quote['ContactName']) || !empty($quote['ContactEmail']) || !empty($quote['ContactPhone'])): ?>
+            <p class="report-panel-sub mb-0">
+              <i class="fa-solid fa-user me-1"></i>Asked by
+              <strong><?= htmlspecialchars((string) ($quote['ContactName'] ?? '—')) ?></strong>
+              <?php if (!empty($quote['ContactEmail'])): ?>
+              · <a href="mailto:<?= htmlspecialchars((string) $quote['ContactEmail']) ?>"><?= htmlspecialchars((string) $quote['ContactEmail']) ?></a>
+              <?php endif; ?>
+              <?php if (!empty($quote['ContactPhone'])): ?>
+              · <a href="tel:<?= htmlspecialchars((string) $quote['ContactPhone']) ?>"><?= htmlspecialchars((string) $quote['ContactPhone']) ?></a>
+              <?php endif; ?>
+            </p>
+            <?php endif; ?>
           </div>
           <?= status_badge((string) $quote['Status']) ?>
         </div>
@@ -673,9 +710,16 @@ echo admin_lead('Quotations', 'Price a request line by line, record the customer
             <i class="fa-solid fa-print me-2"></i>Printable quotation
           </a>
           <?php if (!$isInvoiced): ?>
+          <?php if (!in_array((string) $quote['Status'], ['Rejected', 'Expired'], true)): ?>
           <a class="btn btn-accent" href="admin-invoices.php?action=new&from_quotation=<?= (int) $quote['QuotationNo'] ?>">
             <i class="fa-solid fa-file-invoice-dollar me-2"></i>Convert to invoice
           </a>
+          <?php else: ?>
+          <div class="alert alert-warning small mb-0">
+            This quotation is <?= htmlspecialchars(strtolower((string) $quote['Status'])) ?>.
+            Set it to Accepted in the Decision panel if the customer has changed their mind, then invoice it.
+          </div>
+          <?php endif; ?>
           <a class="btn btn-outline-secondary" href="admin-quotations.php?action=edit&id=<?= (int) $quote['QuotationNo'] ?>">
             <i class="fa-solid fa-pen me-2"></i>Edit lines &amp; prices
           </a>

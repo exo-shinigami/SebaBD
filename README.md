@@ -10,7 +10,7 @@ Two things are deliberately kept separate:
 
 | Layer | What it is | Where it lives |
 | --- | --- | --- |
-| **Database design** | The schema, keys, constraints and relationships this project is graded on | [`database/e_commerce_schema.sql`](database/e_commerce_schema.sql), [`database/e_commerce.sql`](database/e_commerce.sql), the **Database design** section below |
+| **Database design** | The schema, keys, constraints and relationships this project is graded on | [`database/e_commerce.sql`](database/e_commerce.sql), the **Database design** section below |
 | **Application** | Ordinary PHP pages that read/write that schema through PDO | Root `*.php` files, `partials/`, `assets/`, `reports/`, `api/` |
 
 Everything the application shows is stored in, or derived from, the database — there is no
@@ -24,7 +24,7 @@ results.
 | --- | --- |
 | Database | `e_commerce` (MySQL / MariaDB, InnoDB, `utf8mb4`) |
 | Tables | 17 (catalog, customers, stock, orders, quotations, billing, procurement) |
-| Foreign keys | 23, declared with explicit `ON DELETE` behaviour |
+| Foreign keys | 25, declared with explicit `ON DELETE` behaviour |
 | Primary keys | Explicit integer keys (`OrderID`, `ProductID`, …) — no `AUTO_INCREMENT` |
 | Server language | PHP 8.1+ (verified on 8.2.12) |
 | Database access | PDO with `pdo_mysql`, native prepared statements |
@@ -38,8 +38,9 @@ results.
 
 ### Requirements
 
-- Windows with XAMPP (verified with XAMPP 8.2.12 and MariaDB 10.4.32), or any PHP 8.1+ / MySQL
-  environment.
+- Windows with XAMPP (verified with XAMPP 8.2.12 and MariaDB 10.4.32), or any PHP 8.1+ /
+  MySQL-compatible server. XAMPP's MariaDB is what is tested; see the note below the upgrade
+  block if you run MySQL 8.
 - PHP extensions: `pdo_mysql` (required), `mbstring` (used by form validation).
 - Internet access for the Bootstrap, Font Awesome and Google Charts CDNs used by the pages.
 
@@ -56,38 +57,49 @@ From the project root:
 C:\xampp\mysql\bin\mysql.exe -u root < database\e_commerce.sql
 ```
 
-The dump creates the `e_commerce` database, all 17 tables, their keys/constraints **and** a
-small set of realistic sample rows. If you prefer a clean database instead, import
-`database/e_commerce_schema.sql` instead — import one or the other, never both.
+That one file is the whole fresh database: it creates the `e_commerce` database, all 17 tables,
+their keys, foreign keys, `CHECK` constraints and triggers, **and** a small set of realistic
+sample rows (including the sample logins below). It is the single source of truth for the design.
 
-If the database was created before the separate B2B role existed, run the migration once:
+If you already have a database with data you want to keep, **do not import the whole file** — it
+rebuilds the tables from scratch. The same file contains an `UPGRADE` block that only adds
+columns newer code expects and changes no rows. Run just that block against your database:
 
-```powershell
-C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-b2b-client-role.sql
+```bash
+sed -n '/^-- BEGIN UPGRADE/,/^-- END UPGRADE/p' database/e_commerce.sql | mysql -u root e_commerce
 ```
 
-And if it was created before walk-in quotations, internal orders and account deactivation
-existed, run the second migration once as well. It adds `user.IsActive`, `order.OrderType` and
-`order.BranchID`, creates the two house accounts described below, repairs any quotation line
-whose warranty differs from its product, and installs the warranty trigger:
+| Upgrade block adds | Why |
+| --- | --- |
+| `po_item.ReceivedQty` | Partial purchase-order receiving; a line cannot be received twice |
+| `invoice.StockApplied` | Remember whether the invoice moved bulk stock, so deleting it restores only what it took |
+| `quotation.ContactName/Email/Phone` | Who asked, for a visitor with no company contact record |
 
-```powershell
-C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-internal-workflow.sql
+The block is idempotent (safe to run twice) and is a no-op during a full import, because the
+`CREATE TABLE` statements already include those columns. The back office shows a warning banner
+when the database is behind the code, so a missing column is visible rather than silent.
+
+The block uses MariaDB's `ADD COLUMN IF NOT EXISTS`, which XAMPP ships. On MySQL 8, run the same
+`ALTER TABLE` statements without `IF NOT EXISTS` and skip any column that already exists.
+
+The script is re-runnable: it drops the 17 tables it owns and rebuilds them, so importing it
+again gives the same clean result instead of failing with *table already exists*.
+
+The file always works on `e_commerce` — it contains `CREATE DATABASE IF NOT EXISTS` and
+`USE e_commerce`, so naming a different database on the command line does **not** redirect it.
+To rehearse an import against a scratch schema without touching the live one, create an empty
+database and swap the `USE` line:
+
+```bash
+mysql -u root -e 'CREATE DATABASE e_commerce_test'
+sed 's/^USE `e_commerce`;/USE `e_commerce_test`;/' database/e_commerce.sql | mysql -u root
 ```
 
-Finally, if it was created under the **old customer model** — where customer logins held the
-`Client Account` or `B2B Client Account` roles — run the customer-model migration once. It
-makes `user.RoleID` nullable (only SebaBD staff hold roles now), retires those two roles, adds
-`client.AccountType` (`individual` | `b2b` | `house`), gives every customer login a client
-record of their own, and adds/backfills `quotation.ClientID` and `invoice.ClientID`, which are
-how a document is tied to its owner:
+> **It replaces the contents of those 17 tables.** Anything entered through the site since
+the last import is lost. Back it up first if you need it:
+> `C:\xampp\mysql\bin\mysqldump.exe -u root e_commerce > backup.sql`
 
-```powershell
-C:\xampp\mysql\bin\mysql.exe -u root < database\migrate-customer-model.sql
-```
-
-All migration files are guarded, so running one twice is harmless. A database imported from
-the current `database/e_commerce.sql` already contains all of this and needs neither.
+You can also import it from phpMyAdmin (**Import** → choose the file → **Go**).
 
 ### 3. Check the connection settings
 
@@ -161,8 +173,8 @@ same form:
 
 The two house accounts are ordinary `client` rows with no login (`client.UserID` is `NULL`,
 `AccountType = 'house'`), and they always exist, so the house branch foreign keys can never
-fail. They are seeded by the migration, and `walkin_branch_id()` in `helpers.php` creates the
-walk-in rows on demand inside the same transaction if a row is ever missing. The internal
+fail. They are seeded by `database/e_commerce.sql`, and `walkin_branch_id()` in `helpers.php`
+creates the walk-in rows on demand inside the same transaction if a row is ever missing. The internal
 house account is legacy — nothing files under it any more, but the rows stay because old
 `Internal` orders and quotations point at them. The back office labels house-origin paperwork
 with an **Internal** or **Walk-in** badge, and `admin-orders.php` can filter on
@@ -184,9 +196,9 @@ Two more rules the application and the database agree on:
 ## Database design
 
 This is the part the project exists for. The schema is stored once, in
-[`database/e_commerce_schema.sql`](database/e_commerce_schema.sql) (structure only) and
-[`database/e_commerce.sql`](database/e_commerce.sql) (structure + sample rows). Every
-diagram, table and rule below describes exactly those files.
+[`database/e_commerce.sql`](database/e_commerce.sql) — structure, keys, constraints,
+triggers and sample rows together. Every diagram, table and rule below describes exactly
+that file.
 
 ### Design principles
 
@@ -572,14 +584,17 @@ it only exists as part of a header, so `OrderID` cascades.
 
 #### B2B quotations
 
-**`quotation`** — a priced offer issued to a company branch.
+**`quotation`** — a priced offer prepared for a customer. `ClientID` is the owner; the branch
+is optional address detail (individuals have none).
 
 | Column | Type | Key | Notes |
 | --- | --- | --- | --- |
 | `QuotationNo` | `int` | PK | Document number, e.g. `1001` |
-| `BranchID` | `int` | FK → `client_branch` | `RESTRICT`; corporate identity lives here |
+| `BranchID` | `int` | FK → `client_branch` | `NULL` for an individual or a branchless request |
+| `ClientID` | `int` | FK → `client` | Who the offer is prepared for — the ownership link |
 | `QuotationDate` | `date` | | |
 | `Subject` | `varchar(255)` | | e.g. `10 office workstations` |
+| `ContactName`, `ContactEmail`, `ContactPhone` | `varchar` | | Snapshot of who asked — required for a visitor with no company account, so the sales team can reply |
 | `TotalAmount` | `decimal(12,2)` | | Header total; equals the sum of its items |
 | `AmountInWords` | `text` | | Printed wording, produced by `amount_in_words()` |
 | `Status` | `varchar(50)` | | Defaults to `Pending`; also `Accepted`, `Rejected` |
@@ -611,6 +626,7 @@ quotation, or from neither (a manually raised invoice), which is why both links 
 | `OrderID` | `int` | FK → `order`, UK | `NULL` for quotation invoices |
 | `InvoiceDate` | `date` | | |
 | `PaymentStatus` | `varchar(50)` | | Defaults to `DUE`; also `PARTIAL`, `PAID` |
+| `StockApplied` | `tinyint(1)` | | `1` when this invoice moved bulk stock; deleting it then puts that stock back. Sample history stays `0` so an old invoice never invents stock |
 | `TotalAmount` | `decimal(12,2)` | | Amount billed |
 | `RemainingBalance` | `decimal(12,2)` | | Amount still owed; `0.00` once paid |
 | `AmountInWords` | `text` | | Printed wording |
@@ -661,6 +677,7 @@ named `WholesaleUnitPrice` and not just `UnitPrice`.
 | `POItemID` | `int` | PK | |
 | `PONo` | `int` | FK → `purchase_order` | `ON DELETE CASCADE` |
 | `ProductID` | `int` | FK → `product` | `RESTRICT` |
+| `ReceivedQty` | `int` | | How much of `Quantity` has arrived; receiving is capped at the difference, so a line cannot be received twice |
 | `Quantity` | `int` | | |
 | `WholesaleUnitPrice` | `decimal(12,2)` | | Vendor cost per unit at purchase time |
 | `TotalPrice` | `decimal(12,2)` | | `Quantity × WholesaleUnitPrice` |
@@ -897,9 +914,8 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 
 | File / folder | Responsibility |
 | --- | --- |
-| `database/e_commerce.sql` | Full schema + the sample data set, with the sample logins ready to use |
-| `database/e_commerce_schema.sql` | The same schema without sample rows |
-| `database/migrate-b2b-client-role.sql` | One-off migration adding the B2B role to older databases |
+| `database/e_commerce.sql` | The whole fresh database: schema, keys, constraints, triggers and the sample data set |
+
 | `reports/bootstrap.php` | Report base class, catalogue, permissions, page wrapper |
 | `reports/*Report.php` | Report SQL and data preparation |
 | `reports/*.view.php` | Report markup (tables, charts, KPIs) |
@@ -945,8 +961,11 @@ applies to a basket that is already open.
 | Checkout | Requires a signed-in user. Guests are sent to `login.php?next=cart.php` and come straight back with the basket intact |
 | Order | One `order` row for the customer plus one `order_item` per line, written in a single transaction; the basket is emptied and the customer lands on `order-detail.php` |
 
-Stock is **not** decremented at checkout. It moves when the invoice is raised and units are
-attached (`admin-invoices.php`), so the paperwork and the shelf always agree.
+Stock is **not** decremented at checkout — a basket and an order are intentions, not a sale.
+It moves when the invoice is raised (`admin-invoices.php`): a bulk line reduces
+`product.StockQty` by its quantity, and a serialized line marks the exact units Sold when they
+are attached. Deleting the invoice puts the bulk quantity back and returns attached devices to
+stock, so the paperwork and the shelf always agree.
 
 ### Back office
 
@@ -964,9 +983,12 @@ Two rules the modules enforce rather than suggest:
 
 - A category that still holds products cannot be deleted, and a product that has been sold or
   quoted cannot be deleted either — the pages offer deactivation instead.
-- Receiving a purchase order is the bridge back into sellable stock: a bulk line adds to
-  `product.StockQty`, a serialized line creates one `product_instance` per serial number with
-  its warranty clock started from the purchase date.
+- Receiving a purchase order is the bridge back into sellable stock: a bulk line adds the
+  delivered quantity to `product.StockQty`, a serialized line creates one `product_instance`
+  per serial number with its warranty clock started from the purchase date. Deliveries can be
+  recorded in parts, the page shows what is still outstanding, and a line that is fully
+  received refuses further receiving. Once stock has arrived the order's lines are locked, so
+  the receiving record cannot be rewritten.
 
 ### Printed documents
 
@@ -976,8 +998,8 @@ and sign-off can never drift apart between document types.
 
 | Document | Who may open it |
 | --- | --- |
-| Quotation | Staff, and the customer whose company owns the branch it is addressed to |
-| Invoice | Same rule — a customer cannot read another company's paperwork by guessing a number |
+| Quotation | Staff, and the customer the offer was prepared for (`quotation.ClientID`) |
+| Invoice | Same rule — a customer cannot read another customer's paperwork by guessing a number |
 | Purchase order | Staff with buying rights (Admin, Inventory Manager) only: it exposes supplier cost prices |
 
 The invoice adds the receipts recorded against it (with the balance after each one) and the
@@ -1123,6 +1145,7 @@ debug output, enable HTTPS, configure secure session cookies and replace the sam
 | --- | --- |
 | Blank page or PHP errors | PHP 8.1+ behind Apache; project inside the web root; PHP error log |
 | “Database is offline” | MySQL started, `e_commerce` imported, `config.php` credentials |
+| Need connection details or an insert test | `diagnostic.php` — served only to the machine running the site (`127.0.0.1` / `::1`) or to a signed-in Admin; everyone else gets a 404 |
 | Sample login fails | The sample database was imported (`database/e_commerce.sql`) so the accounts exist; compare the username/password with the **Sample logins** table above |
 | Styles or icons missing | Page served over HTTP (not `file://`); internet access for the CDNs |
 | Product images missing | Paths in `product_meta()` and files under `images/products/` (case-sensitive on many servers) |
@@ -1155,7 +1178,7 @@ debug output, enable HTTPS, configure secure session cookies and replace the sam
 ## Where to start
 
 1. Import `database/e_commerce.sql`, then run the site.
-2. Read the **Database design** section above with `database/e_commerce_schema.sql` open beside it.
+2. Read the **Database design** section above with `database/e_commerce.sql` open beside it.
 3. Sign in as `admin` and open `dashboard.php` — the store overview shows revenue, open orders
    and quotations, payments due and stock alerts.
 4. Open a product (`index.php` → any card) to see `product`, `category`, `vendor` and

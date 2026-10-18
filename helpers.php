@@ -802,7 +802,7 @@ function company_details(): array
  * needs a real `client_branch` because `quotation.BranchID`, `invoice.BranchID`
  * and `order.BranchID` are foreign keys. Both are ordinary `client` rows with
  * `UserID = NULL` (the schema's "a company without a login"), seeded by
- * database/migrate-internal-workflow.sql and created on demand below.
+ * database/e_commerce.sql and created on demand below.
  *
  * The names are looked up by string, so they can be renamed in config.php
  * ('system_accounts') without touching the code.
@@ -919,8 +919,8 @@ function system_branch_ids(): array
         $byBranchName[$account['branch']] = $key;
     }
 
-    // House client rows carry AccountType = 'house' (migration 12). Fall back
-    // to the configured names on a database that has not been migrated yet.
+    // House client rows carry AccountType = 'house'. Fall back to the
+    // configured names if the rows are not there yet.
     $rows = db_fetch_all(
         "SELECT b.BranchID, b.BranchName FROM client_branch b
          JOIN client c ON c.ClientID = b.ClientID
@@ -992,8 +992,8 @@ function refuse_staff_order(?array $user = null): void
  * Warranty is a property of the product — the vendor supplies it and the
  * catalog stores it in `product.DefaultWarrantyMonths` — so nothing that
  * arrives from a form is ever trusted for it. See product_warranties() for
- * the batch form, and database/migrate-internal-workflow.sql for the trigger
- * that enforces the same rule inside MySQL.
+ * the batch form, and database/e_commerce.sql for the trigger that enforces
+ * the same rule inside MySQL.
  */
 function product_warranty_months(int $productId): int
 {
@@ -1146,6 +1146,24 @@ function db_update(PDO $pdo, string $table, array $data, array $where): int
     $stmt->execute($params);
 
     return $stmt->rowCount();
+}
+
+/**
+ * Move a product's bulk quantity by $delta (+in, -out).
+ *
+ * Only bulk products use product.StockQty; serialized products are counted by
+ * their product_instance rows instead, so callers check IsSerialized first.
+ * The arithmetic happens inside SQL so two invoices raised at the same moment
+ * cannot overwrite each other's stock movement.
+ */
+function adjust_product_stock(PDO $pdo, int $productId, int $delta): void
+{
+    if ($delta === 0 || $productId <= 0) {
+        return;
+    }
+
+    $stmt = $pdo->prepare('UPDATE product SET StockQty = StockQty + :delta WHERE ProductID = :id');
+    $stmt->execute([':delta' => $delta, ':id' => $productId]);
 }
 
 /**

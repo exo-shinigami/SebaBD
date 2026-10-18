@@ -131,6 +131,7 @@ echo partial_render('partials/header.php', ['page_title' => 'Back office', 'acti
 
 <div class="container pb-5">
     <?= render_flashes() ?>
+    <?= admin_schema_warning() ?>
 
     <?php if (!$dbUp): ?>
     <div class="alert alert-danger">

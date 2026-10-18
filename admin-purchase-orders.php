@@ -27,7 +27,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-purchase-orders.php');
 $dbUp   = db() !== null;
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'new', 'edit', 'view']);
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $line = db_fetch_all(
                 'SELECT po.PONo, po.PODate, po.VendorID,
-                        poi.POItemID, poi.ProductID, poi.Quantity, poi.WholesaleUnitPrice,
+                        poi.POItemID, poi.ProductID, poi.Quantity, poi.ReceivedQty, poi.WholesaleUnitPrice,
                         p.ProductName, p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
                         v.VendorName
                  FROM po_item poi
@@ -66,10 +66,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [':id' => $itemId, ':po' => $poNo]
             );
 
+            $received    = (int) ($line[0]['ReceivedQty'] ?? 0);
+            $outstanding = $line ? (int) $line[0]['Quantity'] - $received : 0;
+
             if (!$line) {
                 $errors[] = 'That purchase-order line no longer exists.';
             } elseif (strtotime($receiveDate) === false) {
                 $errors[] = 'The receiving date is not valid.';
+            } elseif ($outstanding <= 0) {
+                $errors[] = 'That line is already fully received (' . $received . ' of '
+                          . (int) $line[0]['Quantity'] . '). Nothing is outstanding, so receiving it again '
+                          . 'would invent stock.';
             } elseif ($mode === 'units') {
                 $product = $line[0];
                 if ((int) $product['IsSerialized'] !== 1) {
@@ -80,8 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!$serials) {
                         $errors[] = 'Enter at least one serial number to receive, one per line.';
                     }
-                    if (count($serials) > (int) $product['Quantity']) {
-                        $errors[] = 'This line ordered ' . (int) $product['Quantity'] . ' unit(s) but '
+                    if (count($serials) > $outstanding) {
+                        $errors[] = 'This line still has ' . $outstanding . ' unit(s) outstanding but '
                                   . count($serials) . ' serial numbers were entered.';
                     }
                     if (!array_filter($serials, fn($s) => strlen($s) <= 100)) {
@@ -114,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $months = (int) $product['DefaultWarrantyMonths'];
                         $vendorExpiry = date('Y-m-d', strtotime($receiveDate . ' +' . $months . ' months'));
 
-                        $created = db_transaction($pdo, function (PDO $tx) use ($serials, $product, $receiveDate, $vendorExpiry) {
+                        $created = db_transaction($pdo, function (PDO $tx) use ($serials, $product, $receiveDate, $vendorExpiry, $received) {
                             $made = 0;
                             foreach ($serials as $serial) {
                                 db_insert($tx, 'product_instance', [
@@ -131,6 +138,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $made++;
                             }
 
+                            // Record how much of the line has now arrived, so the
+                            // same serials cannot produce a second batch of stock.
+                            db_update($tx, 'po_item',
+                                ['ReceivedQty' => $received + $made],
+                                ['POItemID' => (int) $product['POItemID']]);
+
                             return $made;
                         });
 
@@ -146,17 +159,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $errors[] = '“' . $product['ProductName'] . '” is tracked by serial number, so its units must be '
                               . 'received one by one with their serial numbers.';
                 } else {
-                    $before = (int) $product['StockQty'];
-                    $added  = (int) $product['Quantity'];
-                    $after  = $before + $added;
+                    // A bulk line can arrive in several deliveries. The form sends
+                    // how much arrived this time; leaving it blank means the rest.
+                    $qty = post_int('receive_qty', 0);
+                    if ($qty <= 0) {
+                        $qty = $outstanding;
+                    }
+                    if ($qty > $outstanding) {
+                        $errors[] = 'This line still has ' . $outstanding . ' unit(s) outstanding, so '
+                                  . $qty . ' cannot be received. Enter ' . $outstanding . ' or fewer.';
+                    } elseif ($qty <= 0) {
+                        $errors[] = 'Enter how many units arrived — it must be at least 1.';
+                    } else {
+                        $before = (int) $product['StockQty'];
+                        $after  = $before + $qty;
 
-                    db_transaction($pdo, function (PDO $tx) use ($product, $after) {
-                        db_update($tx, 'product', ['StockQty' => $after], ['ProductID' => (int) $product['ProductID']]);
-                    });
+                        db_transaction($pdo, function (PDO $tx) use ($product, $received, $qty) {
+                            // Increment in SQL, not by writing back a number read
+                            // before the transaction, so two receivers cannot
+                            // overwrite each other's delivery.
+                            adjust_product_stock($tx, (int) $product['ProductID'], $qty);
+                            db_update($tx, 'po_item',
+                                ['ReceivedQty' => $received + $qty],
+                                ['POItemID' => (int) $product['POItemID']]);
+                        });
 
-                    flash_set('success', 'Received ' . $added . ' × “' . $product['ProductName'] . '” from '
-                        . $product['VendorName'] . ' — bulk stock went from ' . $before . ' to ' . $after . '.');
-                    post_success('admin-purchase-orders.php?action=view&id=' . $poNo);
+                        flash_set('success', 'Received ' . $qty . ' × “' . $product['ProductName'] . '” from '
+                            . $product['VendorName'] . ' — bulk stock went from ' . $before . ' to ' . $after . '.');
+                        post_success('admin-purchase-orders.php?action=view&id=' . $poNo);
+                    }
                 }
             } else {
                 $errors[] = 'Choose how this line is being received.';
@@ -172,14 +203,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($intent === 'delete') {
         $poNo = post_int('po_no');
         try {
+            $receivedRow = $poNo > 0
+                ? db_fetch_all('SELECT COALESCE(SUM(ReceivedQty), 0) AS n FROM po_item WHERE PONo = :id', [':id' => $poNo])
+                : [];
+            $receivedSum = (int) ($receivedRow[0]['n'] ?? 0);
+
             if ($poNo <= 0) {
                 $errors[] = 'That purchase order no longer exists.';
+            } elseif ($receivedSum > 0) {
+                // Deleting the order now would leave the stock it delivered
+                // with no paperwork behind it.
+                $errors[] = 'Purchase order #' . $poNo . ' has already delivered ' . $receivedSum
+                          . ' unit(s) into stock, so it cannot be deleted. Keep it as the receiving record.';
             } else {
                 // po_item.PONo is ON DELETE CASCADE, so the lines go with the
                 // header; nothing else references a purchase order.
                 db_delete($pdo, 'purchase_order', ['PONo' => $poNo]);
-                flash_set('success', 'Purchase order #' . $poNo . ' and its lines were deleted. '
-                    . 'Stock that was already received from it is not rolled back.');
+                flash_set('success', 'Purchase order #' . $poNo . ' and its lines were deleted.');
                 post_success('admin-purchase-orders.php');
             }
         } catch (Throwable $e) {
@@ -188,6 +228,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'list';
     } else {
         $editNo    = post_int('po_no');
+        // Lines that have delivered stock are history: rewriting the quantities
+        // would contradict what is already on the shelf.
+        if ($editNo > 0) {
+            $receivedRow = db_fetch_all(
+                'SELECT COALESCE(SUM(ReceivedQty), 0) AS n FROM po_item WHERE PONo = :id',
+                [':id' => $editNo]
+            );
+            if ((int) ($receivedRow[0]['n'] ?? 0) > 0) {
+                $errors[] = 'Purchase order #' . $editNo . ' has already received stock, so its lines are locked. '
+                          . 'Raise a new purchase order for anything else you need.';
+            }
+        }
         $vendorId  = post_int('vendor_id');
         $poDate    = post_str('po_date', date('Y-m-d'));
         $terms     = post_str('terms');
@@ -332,7 +384,8 @@ if ($dbUp) {
             'SELECT po.PONo, po.VendorID, po.PODate, po.TotalAmount, po.Terms,
                     v.VendorName, v.Location, v.ContactPhone,
                     (SELECT COUNT(*) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Lines`,
-                    (SELECT COALESCE(SUM(poi.Quantity), 0) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Units`
+                    (SELECT COALESCE(SUM(poi.Quantity), 0) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Units`,
+                    (SELECT COALESCE(SUM(poi.ReceivedQty), 0) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Received`
              FROM purchase_order po
              JOIN vendor v ON v.VendorID = po.VendorID
              WHERE po.PONo = :id',
@@ -345,7 +398,8 @@ if ($dbUp) {
         }
 
         $orderLines = db_fetch_all(
-            'SELECT poi.POItemID, poi.ProductID, poi.Quantity, poi.WholesaleUnitPrice, poi.TotalPrice,
+            'SELECT poi.POItemID, poi.ProductID, poi.Quantity, poi.ReceivedQty,
+                    poi.WholesaleUnitPrice, poi.TotalPrice,
                     p.ProductName, p.Brand, p.Model, p.IsSerialized, p.StockQty, p.StandardPrice,
                     p.DefaultWarrantyMonths
              FROM po_item poi
@@ -354,6 +408,12 @@ if ($dbUp) {
              ORDER BY poi.POItemID',
             [':id' => $id]
         );
+
+        if ($action === 'edit' && !empty(array_filter($orderLines, fn($l) => (int) $l['ReceivedQty'] > 0))) {
+            flash_set('error', 'Purchase order #' . $id . ' has already received stock, so its lines are locked.');
+            header('Location: admin-purchase-orders.php?action=view&id=' . $id);
+            exit;
+        }
     }
 
     if ($action === 'new') {
@@ -383,7 +443,8 @@ if ($dbUp) {
         'SELECT po.PONo, po.PODate, po.TotalAmount, po.Terms,
                 v.VendorID, v.VendorName, v.Location,
                 (SELECT COUNT(*) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Lines`,
-                (SELECT COALESCE(SUM(poi.Quantity), 0) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Units`'
+                (SELECT COALESCE(SUM(poi.Quantity), 0) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Units`,
+                (SELECT COALESCE(SUM(poi.ReceivedQty), 0) FROM po_item poi WHERE poi.PONo = po.PONo) AS `Received`'
         . $from . $whereSql . '
          ORDER BY po.PODate DESC, po.PONo DESC
          LIMIT ' . $orderPage['perPage'] . ' OFFSET ' . $orderPage['offset'],
@@ -470,7 +531,7 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
   <?= partial_render('partials/admin-list.php', [
       'panel_title' => 'Purchase orders',
       'panel_sub'   => 'What has been ordered from each supplier, and what it committed the business to.',
-      'columns'     => ['#', 'Date', 'Supplier', 'Lines', 'Units', 'Value', 'Terms', ''],
+      'columns'     => ['#', 'Date', 'Supplier', 'Lines', 'Units (received)', 'Value', 'Terms', ''],
       'rows'        => array_map(fn($row) => [
           '<a class="text-decoration-none" href="admin-purchase-orders.php?action=view&id=' . (int) $row['PONo'] . '">'
               . (int) $row['PONo'] . '</a>',
@@ -479,7 +540,9 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
               . htmlspecialchars($row['VendorName']) . '</a>'
               . ($row['Location'] ? '<small class="d-block text-muted">' . htmlspecialchars($row['Location']) . '</small>' : ''),
           (int) $row['Lines'],
-          number_format((int) $row['Units']),
+          number_format((int) $row['Units'])
+              . '<small class="d-block ' . ((int) $row['Received'] >= (int) $row['Units'] ? 'text-success' : 'text-muted') . '">'
+              . number_format((int) $row['Received']) . ' in</small>',
           '<span class="admin-line-total">' . money($row['TotalAmount']) . '</span>',
           htmlspecialchars((string) ($row['Terms'] ?? '—')),
           '<div class="admin-actions-cell">'
@@ -553,7 +616,12 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
                     · list <?= money($line['StandardPrice']) ?>
                   </small>
                 </td>
-                <td class="text-end"><?= (int) $line['Quantity'] ?></td>
+                <td class="text-end">
+                  <?= (int) $line['Quantity'] ?>
+                  <small class="d-block text-muted">
+                    <?= (int) $line['ReceivedQty'] ?> received
+                  </small>
+                </td>
                 <td class="text-end admin-line-total"><?= money($line['WholesaleUnitPrice']) ?></td>
                 <td class="text-end admin-line-total"><?= money($line['TotalPrice']) ?></td>
                 <td class="text-end">
@@ -594,14 +662,15 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
         <div class="report-panel-head">
           <h2 class="report-panel-title">Receive these lines into stock</h2>
           <p class="report-panel-sub">
-            Each confirmation adds to the inventory — the schema stores no “already received” flag, so the count on
-            hand is shown beside every line to make a second entry obvious.
+            Each line remembers how much has arrived, so a delivery can be recorded in parts and the same
+            units can never be received twice.
           </p>
         </div>
 
         <?php foreach ($orderLines as $line):
-            $serialized = (int) $line['IsSerialized'] === 1;
-            $unitsInStock = $serialized
+            $serialized  = (int) $line['IsSerialized'] === 1;
+            $outstanding = max(0, (int) $line['Quantity'] - (int) $line['ReceivedQty']);
+            $inStock = $serialized
                 ? db_fetch_all("SELECT COUNT(*) AS n FROM product_instance WHERE ProductID = :id AND Status = 'In Stock'", [':id' => (int) $line['ProductID']])[0]['n'] ?? 0
                 : (int) $line['StockQty'];
         ?>
@@ -609,11 +678,15 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
           <span class="admin-detail-label">Line #<?= (int) $line['POItemID'] ?></span>
           <span class="admin-detail-value">
             <strong><?= htmlspecialchars($line['ProductName']) ?></strong>
-            — ordered <?= (int) $line['Quantity'] ?>,
-            currently <?= (int) $unitsInStock ?> in stock
+            — ordered <?= (int) $line['Quantity'] ?>, received <?= (int) $line['ReceivedQty'] ?>
+            <?= $outstanding > 0
+                ? ', outstanding <strong>' . $outstanding . '</strong>'
+                : ', <span class="report-badge report-badge-ok">fully received</span>' ?>
+            · <?= (int) $inStock ?> in stock
             (<?= $serialized ? 'serialized units' : 'bulk quantity' ?>)
           </span>
         </div>
+        <?php if ($outstanding > 0): ?>
         <form method="post" action="admin-purchase-orders.php" class="mb-4 mt-2" data-ajax>
           <?= csrf_field() ?>
           <input type="hidden" name="intent" value="receive">
@@ -623,16 +696,17 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
 
           <?php if ($serialized): ?>
           <label class="form-label" for="serials_<?= (int) $line['POItemID'] ?>">
-            Serial numbers received <span class="text-muted fw-normal">(one per line, up to <?= (int) $line['Quantity'] ?>)</span>
+            Serial numbers received <span class="text-muted fw-normal">(one per line, up to <?= $outstanding ?> outstanding)</span>
           </label>
           <textarea class="form-control mb-2" id="serials_<?= (int) $line['POItemID'] ?>" name="serial_numbers" rows="3"
                     placeholder="SN-XXXX-0001&#10;SN-XXXX-0002"></textarea>
           <?php else: ?>
-          <div class="mb-2">
-            <span class="text-muted small">
-              Receiving adds <strong><?= (int) $line['Quantity'] ?></strong> to the bulk quantity of this product.
-            </span>
-          </div>
+          <label class="form-label" for="receive_qty_<?= (int) $line['POItemID'] ?>">
+            Units received this delivery <span class="text-muted fw-normal">(outstanding: <?= $outstanding ?>)</span>
+          </label>
+          <input class="form-control form-control-sm mb-2" style="max-width:10rem"
+                 id="receive_qty_<?= (int) $line['POItemID'] ?>" name="receive_qty" type="number"
+                 min="1" max="<?= $outstanding ?>" value="<?= $outstanding ?>" required>
           <?php endif; ?>
 
           <div class="d-flex flex-wrap gap-2 align-items-end">
@@ -643,10 +717,13 @@ echo admin_lead('Purchase orders', 'Your own procurement record: order stock fro
             </div>
             <button class="btn btn-accent btn-sm" type="submit">
               <i class="fa-solid fa-arrow-down-to-bracket me-1"></i>
-              <?= $serialized ? 'Record units' : 'Add ' . (int) $line['Quantity'] . ' to stock' ?>
+              <?= $serialized ? 'Record units' : 'Receive into stock' ?>
             </button>
           </div>
         </form>
+        <?php else: ?>
+        <div class="mb-4 mt-2"><span class="text-muted small">Nothing outstanding on this line.</span></div>
+        <?php endif; ?>
         <?php endforeach; ?>
       </div>
     </div>

@@ -104,7 +104,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 flash_set('success', 'B2B account registered — company #' . $clientId . ', branch “' . $branchName . '” created. Our sales team will reach out shortly.');
                 // AJAX callers get {ok:true, redirect:…} instead of a 302.
-                post_success('index.php');
+                // With a login, the company dashboard is the useful next page
+                // (branches, quotations, invoices); without one, stay on the
+                // storefront and let the flash explain what happens next.
+                post_success($linkUserId ? 'dashboard.php' : 'index.php');
             } catch (PDOException $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 $errors[] = 'Could not register the company. ' . (APP_DEBUG ? $e->getMessage() : 'Please try again.');

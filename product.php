@@ -32,6 +32,12 @@ if ($product) {
 
 $page_title = $product ? $product['ProductName'] : 'Product not found';
 
+// A missing product is a real 404, exactly as the document pages report an
+// unknown order, invoice or quotation — a friendly page, correct status.
+if (!$product) {
+    http_response_code(404);
+}
+
 $current  = (float) ($product['StandardPrice'] ?? 0);
 $wasPrice = !empty($product['sale']) && (float) $product['sale'] > $current ? (float) $product['sale'] : 0.0;
 $discount = $wasPrice > 0 ? ($wasPrice - $current) / $wasPrice * 100 : 0.0;
@@ -132,8 +138,8 @@ $quotationUrl = $canBuy ? 'quotation-request.php?product=' . $productId . '&qty=
             </div>
             <p class="small text-muted mb-4">
               Prefer a single form for a whole order?
-              <a href="<?= $orderUrl ?>">Use the quick order form</a> — it takes many lines at once and can be
-              submitted without an account.
+              <a href="<?= $orderUrl ?>">Use the quick order form</a> — it takes many lines at once; you sign in
+              when you submit, so the order lands in your account.
             </p>
           </form>
           <?php else: ?>

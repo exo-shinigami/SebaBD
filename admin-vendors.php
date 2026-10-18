@@ -15,7 +15,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-vendors.php');
 $dbUp   = db() !== null;
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'new', 'edit']);
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 $form   = ['VendorID' => 0, 'VendorName' => '', 'Location' => '', 'ContactPhone' => ''];

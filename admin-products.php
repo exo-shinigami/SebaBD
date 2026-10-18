@@ -18,7 +18,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-products.php');
 $dbUp   = db() !== null;
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'new', 'edit']);
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 
@@ -526,20 +526,20 @@ echo admin_lead('Products', 'The sellable catalog. Each product has exactly one 
           <h2 class="report-panel-title">Where it has been used</h2>
         </div>
         <?php
+        // Distinct placeholders: PDO's native prepares reject a named parameter
+        // used twice, and the silently empty result made every count here zero.
         $usage = db_fetch_all(
-            // One placeholder per subquery: native prepared statements reject a
-            // statement that reuses the same named parameter (SQLSTATE[HY093]).
-            'SELECT (SELECT COUNT(*) FROM order_item     WHERE ProductID = :oid) AS OrderLines,
-                    (SELECT COUNT(*) FROM quotation_item WHERE ProductID = :qid) AS QuoteLines,
-                    (SELECT COUNT(*) FROM invoice_item   WHERE ProductID = :iid) AS InvoiceLines,
-                    (SELECT COUNT(*) FROM po_item        WHERE ProductID = :pid) AS PoLines,
-                    (SELECT COUNT(*) FROM product_instance WHERE ProductID = :uid) AS Units',
+            'SELECT (SELECT COUNT(*) FROM order_item     WHERE ProductID = :order_lines) AS OrderLines,
+                    (SELECT COUNT(*) FROM quotation_item WHERE ProductID = :quote_lines) AS QuoteLines,
+                    (SELECT COUNT(*) FROM invoice_item   WHERE ProductID = :invoice_lines) AS InvoiceLines,
+                    (SELECT COUNT(*) FROM po_item        WHERE ProductID = :po_lines) AS PoLines,
+                    (SELECT COUNT(*) FROM product_instance WHERE ProductID = :units) AS Units',
             [
-                ':oid' => (int) $edit['ProductID'],
-                ':qid' => (int) $edit['ProductID'],
-                ':iid' => (int) $edit['ProductID'],
-                ':pid' => (int) $edit['ProductID'],
-                ':uid' => (int) $edit['ProductID'],
+                ':order_lines'   => (int) $edit['ProductID'],
+                ':quote_lines'   => (int) $edit['ProductID'],
+                ':invoice_lines' => (int) $edit['ProductID'],
+                ':po_lines'      => (int) $edit['ProductID'],
+                ':units'         => (int) $edit['ProductID'],
             ]
         );
         $u = $usage[0] ?? [];

@@ -127,6 +127,22 @@ function back_office_modules(): array
     ];
 }
 
+/**
+ * The module page's action, restricted to the ones that page implements.
+ *
+ * ?action= is typed by people and copied from old bookmarks, so an unknown
+ * value must not silently fall through to another branch — an unrecognised
+ * action used to land on the edit/view read with no record loaded (which
+ * emitted PHP warnings) or on a blank "new" form for a product that does not
+ * exist. Anything outside the page's list is its plain list view.
+ */
+function admin_action(array $allowed): string
+{
+    $action = (string) ($_GET['action'] ?? 'list');
+
+    return in_array($action, $allowed, true) ? $action : 'list';
+}
+
 /** One module's metadata, or null when the page is not a module. */
 function back_office_module(string $page): ?array
 {
@@ -182,13 +198,69 @@ function back_office_modules_by_group(?array $user = null): array
 /* --------------------------------------------------------- page builders */
 
 /**
+ * Columns this build needs beyond the original schema. A database imported
+ * before they existed keeps working for most pages, so the back office says so
+ * plainly instead of letting stock and receiving quietly misbehave.
+ */
+function admin_missing_schema_columns(): array
+{
+    static $missing = null;
+    if ($missing !== null) {
+        return $missing;
+    }
+
+    $pdo = db();
+    if (!$pdo) {
+        return $missing = [];
+    }
+
+    $required = [
+        'po_item.ReceivedQty',
+        'invoice.StockApplied',
+        'quotation.ContactName',
+        'quotation.ContactEmail',
+        'quotation.ContactPhone',
+    ];
+    $found = db_fetch_all(
+        "SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND ((TABLE_NAME = 'po_item' AND COLUMN_NAME = 'ReceivedQty')
+             OR (TABLE_NAME = 'invoice' AND COLUMN_NAME = 'StockApplied')
+             OR (TABLE_NAME = 'quotation'
+                 AND COLUMN_NAME IN ('ContactName', 'ContactEmail', 'ContactPhone')))"
+    );
+    $have = array_map(fn($row) => $row['TABLE_NAME'] . '.' . $row['COLUMN_NAME'], $found);
+
+    return $missing = array_values(array_diff($required, $have));
+}
+
+/** The upgrade notice, or '' when the schema is current. */
+function admin_schema_warning(): string
+{
+    $missing = admin_missing_schema_columns();
+    if (!$missing) {
+        return '';
+    }
+
+    return '<div class="container pt-3"><div class="alert alert-warning mb-0">'
+        . '<i class="fa-solid fa-database me-2"></i>'
+        . '<strong>Database update needed.</strong> '
+        . 'Run the <code>BEGIN UPGRADE</code> block inside <code>database/e_commerce.sql</code> once — '
+        . 'it only adds columns and keeps your data, so purchase-order receiving, invoice stock '
+        . 'movements and visitor quotation contacts work. Missing: '
+        . '<code>' . htmlspecialchars(implode('</code>, <code>', $missing)) . '</code>.'
+        . '</div></div>';
+}
+
+/**
  * Heading strip for a back-office page, mirroring the report pages so the two
  * staff areas look like one product. $title and $subtitle are inserted as-is —
  * escape dynamic text first.
  */
 function admin_lead(string $title, string $subtitle = '', string $backHref = 'admin.php', string $backLabel = 'Back office'): string
 {
-    return '<section class="report-lead py-4 mb-4">'
+    return admin_schema_warning()
+        . '<section class="report-lead py-4 mb-4">'
         . '<div class="container d-flex flex-wrap justify-content-between align-items-end gap-3">'
         . '<div><span class="section-label">Back office</span>'
         . '<h1 class="h3 fw-bold mb-1 text-white">' . $title . '</h1>'

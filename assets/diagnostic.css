@@ -1,0 +1,126 @@
+/* Local DB diagnostic page — minimal, self-contained styling.
+   The page already inherits Bootstrap from partials/header.php, so this file
+   only adds the small bits that make PASS / FAIL / raw output readable. */
+
+.diagnostic-container {
+  max-width: 920px;
+}
+
+.diagnostic-card {
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-body-bg);
+}
+
+.diagnostic-card-head {
+  padding: 1.25rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.diagnostic-section {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.diagnostic-section:last-child {
+  border-bottom: none;
+}
+
+.diagnostic-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.diagnostic-pass-badge {
+  background: var(--bs-success);
+  color: var(--bs-success-continue);
+}
+
+.diagnostic-fail-badge {
+  background: var(--bs-danger);
+  color: var(--bs-danger-continue);
+}
+
+.diagnostic-pass {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+}
+
+.diagnostic-fail {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+}
+
+.diagnostic-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.25rem;
+}
+
+.diagnostic-label {
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.diagnostic-detail {
+  margin-top: 0.35rem;
+  padding-left: calc(1.6em + 0.65rem);
+  color: var(--bs-secondary-color);
+  font-size: 0.92rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.diagnostic-raw {
+  margin-top: 0.5rem;
+}
+
+.diagnostic-pre {
+  margin: 0.35rem 0 0 0;
+  padding: 0.75rem 1rem;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.breadcrumb-dense .breadcrumb-item a {
+  color: var(--bs-link-color);
+  text-decoration: none;
+}
+
+.breadcrumb-dense .breadcrumb-item a:hover {
+  text-decoration: underline;
+}
+
+.list-numbered {
+  padding-left: 1.2rem;
+}
+
+.list-spaced li {
+  margin-bottom: 0.4rem;
+}
+
+.muted-secondary,
+.text-muted {
+  --bs-secondary-color: var(--bs-secondary-color);
+}

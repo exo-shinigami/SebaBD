@@ -16,7 +16,7 @@ require_once __DIR__ . '/admin-bootstrap.php';
 
 $user   = require_module('admin-orders.php');
 $dbUp   = db() !== null;
-$action = (string) ($_GET['action'] ?? 'list');
+$action = admin_action(['list', 'view']);
 $id     = max(0, (int) ($_GET['id'] ?? 0));
 $errors = [];
 
@@ -270,10 +270,10 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
       'rows'        => array_map(function ($row) {
           $actions = '<a class="btn btn-sm btn-outline-secondary" href="admin-orders.php?action=view&id=' . (int) $row['OrderID'] . '" title="Open">'
                    . '<i class="fa-solid fa-eye"></i><span class="visually-hidden">Open</span></a> ';
-          if ($row['InvoiceNo'] === null) {
+          if ($row['InvoiceNo'] === null && (string) $row['OrderStatus'] !== 'Cancelled') {
               $actions .= '<a class="btn btn-sm btn-outline-dark" href="admin-invoices.php?action=new&from_order=' . (int) $row['OrderID'] . '" title="Raise an invoice">'
                         . '<i class="fa-solid fa-file-invoice-dollar"></i><span class="visually-hidden">Invoice</span></a> ';
-          } else {
+          } elseif ($row['InvoiceNo'] !== null) {
               $actions .= '<a class="btn btn-sm btn-outline-success" href="admin-invoices.php?action=view&no=' . (int) $row['InvoiceNo'] . '" title="Invoice">'
                         . '<i class="fa-solid fa-file-invoice"></i><span class="visually-hidden">Invoice</span></a> ';
           }
