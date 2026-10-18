@@ -91,6 +91,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'list';
     } else {
         $editId     = post_int('quotation_no');
+        // The create form prefills quotation_no with the next free number, so a
+        // positive value alone does not mean "edit" — the posted intent does.
+        // Zeroing it on create keeps every check below ($editId === 0 / > 0)
+        // reading "new document", and the save picks the real next number.
+        if (post_str('intent') === 'create') {
+            $editId = 0;
+        }
         // Editing a quotation that has an invoice would change the document the
         // bill was built from while the invoice keeps the old lines. Lock it.
         if ($editId > 0 && db_count('invoice', 'QuotationNo = :id', [':id' => $editId]) > 0) {

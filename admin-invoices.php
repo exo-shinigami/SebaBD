@@ -350,6 +350,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         /* ------------------------------------------------ create / update */
         $editNo     = post_int('invoice_no');
+        // The create form prefills invoice_no with the next free number, so a
+        // positive value alone does not mean "edit" — the posted intent does.
+        // Zeroing it on create keeps every check below ($editNo === 0 / > 0)
+        // reading "new document", and the save picks the real next number.
+        if (post_str('intent') === 'create') {
+            $editNo = 0;
+        }
         $branchId   = post_int('branch_id');
         $quotation  = post_int('quotation_no');
         $orderId    = post_int('order_id');

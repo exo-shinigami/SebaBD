@@ -228,6 +228,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = 'list';
     } else {
         $editNo    = post_int('po_no');
+        // The create form prefills po_no with the next free number, so a
+        // positive value alone does not mean "edit" — the posted intent does.
+        // Zeroing it on create keeps the "already received" lock and the
+        // update branch below reading "new order", and the save picks the
+        // real next number.
+        if (post_str('intent') === 'create') {
+            $editNo = 0;
+        }
         // Lines that have delivered stock are history: rewriting the quantities
         // would contradict what is already on the shelf.
         if ($editNo > 0) {
