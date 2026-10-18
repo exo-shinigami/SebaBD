@@ -141,19 +141,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 if ($intent === 'unit_update') {
                     $existing = db_fetch_all(
-                        'SELECT EquipmentID FROM product_instance WHERE EquipmentID = :id',
+                        'SELECT EquipmentID, ProductID, Status FROM product_instance WHERE EquipmentID = :id',
                         [':id' => $unitId]
                     );
                     if (!$existing) {
                         deny_page(404, 'Unit not found', 'Serialized unit #' . $unitId . ' does not exist.');
                     }
-                    db_update($pdo, 'product_instance', $data, ['EquipmentID' => $unitId]);
-                    flash_set('success', 'Unit #' . $unitId . ' (' . $serial . ') updated.');
+
+                    // A unit named on an invoice is the record of which physical
+                    // device was sold. It can move to Sold only through that
+                    // invoice, and it cannot be relabelled as a different product.
+                    $soldOn = db_count('invoice_item', 'EquipmentID = :id', [':id' => $unitId]);
+                    if ($soldOn > 0 && (int) $existing[0]['ProductID'] !== $productId) {
+                        $errors[] = 'Unit #' . $unitId . ' is recorded on invoice line #' . $soldOn
+                                  . ', so its product cannot change. Delete that invoice first if the sale was wrong.';
+                    } elseif ($soldOn > 0 && $status !== 'Sold') {
+                        $errors[] = 'Unit #' . $unitId . ' is recorded on invoice line #' . $soldOn
+                                  . ', so it cannot go back to “' . $status . '” while that invoice stands. '
+                                  . 'Delete the invoice to return the device to stock.';
+                    } else {
+                        db_update($pdo, 'product_instance', $data, ['EquipmentID' => $unitId]);
+                        flash_set('success', 'Unit #' . $unitId . ' (' . $serial . ') updated.');
+                        post_success('admin-stock.php?product=' . $productId . '&status=' . urlencode($status));
+                    }
                 } else {
                     $newId = db_transaction($pdo, fn(PDO $tx) => db_insert($tx, 'product_instance', $data, 'EquipmentID'));
                     flash_set('success', 'Unit #' . $newId . ' recorded with serial ' . $serial . '.');
+                    post_success('admin-stock.php?product=' . $productId . '&status=' . urlencode($status));
                 }
-                post_success('admin-stock.php?product=' . $productId . '&status=' . urlencode($status));
             } catch (Throwable $e) {
                 $errors[] = admin_error_message($e, 'Could not save that unit.');
             }

@@ -17,7 +17,8 @@ $user = require_login('quotation.php');
 $no   = max(0, (int) ($_GET['no'] ?? 0));
 
 $rows = db_fetch_all(
-    'SELECT q.QuotationNo, q.BranchID, q.ClientID, q.QuotationDate, q.Subject, q.TotalAmount,
+    'SELECT q.QuotationNo, q.BranchID, q.ClientID, q.QuotationDate, q.Subject,
+            q.ContactName, q.ContactEmail, q.ContactPhone, q.TotalAmount,
             q.AmountInWords, q.Status,
             b.BranchName, b.BranchAddress, b.ContactNo,
             c.ClientID AS OwnerClientID, c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address
@@ -118,8 +119,13 @@ echo partial_render('partials/document.php', [
         $quotation['CompanyName'],
         $quotation['BranchName'],
         $quotation['BranchAddress'] ?: $quotation['Address'],
-        $quotation['ContactPerson'] ? 'Attn: ' . $quotation['ContactPerson'] : null,
-        trim(($quotation['Phone'] ?: $quotation['ContactNo'] ?: '') . ' ' . ($quotation['Email'] ? '· ' . $quotation['Email'] : '')),
+        // The snapshotted requester wins over the client record: a walk-in
+        // visitor has no client contact of their own, and a B2B contact may
+        // differ from the company's main contact person.
+        ($quotation['ContactName'] ?: $quotation['ContactPerson'])
+            ? 'Attn: ' . ($quotation['ContactName'] ?: $quotation['ContactPerson']) : null,
+        trim(($quotation['ContactPhone'] ?: $quotation['Phone'] ?: $quotation['ContactNo'] ?: '')
+            . ' ' . (($quotation['ContactEmail'] ?: $quotation['Email']) ? '· ' . ($quotation['ContactEmail'] ?: $quotation['Email']) : '')),
     ]),
     'meta_rows'        => $metaRows,
     'columns'          => [

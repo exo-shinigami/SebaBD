@@ -9,6 +9,17 @@
 --
 --   Import (phpMyAdmin): Import → choose this file → Go.
 --
+-- KEEPING EXISTING DATA? Do not import the whole file — it rebuilds every
+-- table. The file also contains an UPGRADE block (search for “BEGIN UPGRADE”)
+-- that only adds the columns newer code expects and touches no rows. Run just
+-- that block against your existing database:
+--
+--   sed -n '/^-- BEGIN UPGRADE/,/^-- END UPGRADE/p' database/e_commerce.sql \
+--     | mysql -u root e_commerce
+--
+-- The block is harmless in a full import too: after the tables are built the
+-- columns already exist, so the statements do nothing.
+--
 -- The script is RE-RUNNABLE. It drops the 17 tables it owns before rebuilding
 -- them, so importing it a second time gives the same clean result instead of
 -- failing with "table already exists". Only the `e_commerce` database and the
@@ -315,6 +326,10 @@ CREATE TABLE `quotation` (
   `ClientID` int(11) DEFAULT NULL COMMENT 'who owns the document — the customer the quotation was prepared for',
   `QuotationDate` date NOT NULL,
   `Subject` varchar(255) DEFAULT NULL,
+  `ContactName` varchar(255) DEFAULT NULL
+    COMMENT 'Who asked, as entered — walk-in visitors have no client contact of their own',
+  `ContactEmail` varchar(255) DEFAULT NULL,
+  `ContactPhone` varchar(50) DEFAULT NULL,
   `TotalAmount` decimal(12,2) NOT NULL,
   `AmountInWords` text DEFAULT NULL,
   `Status` varchar(50) DEFAULT 'Pending'
@@ -360,16 +375,21 @@ CREATE TABLE `invoice` (
   `OrderID` int(11) DEFAULT NULL,
   `InvoiceDate` date NOT NULL,
   `PaymentStatus` varchar(50) DEFAULT 'DUE',
+  `StockApplied` tinyint(1) NOT NULL DEFAULT 0
+    COMMENT '1 = this invoice already moved bulk stock (product.StockQty); deleting it puts that stock back',
   `TotalAmount` decimal(12,2) NOT NULL,
   `RemainingBalance` decimal(12,2) NOT NULL,
   `AmountInWords` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-INSERT INTO `invoice` (`InvoiceNo`, `BranchID`, `ClientID`, `QuotationNo`, `OrderID`, `InvoiceDate`, `PaymentStatus`, `TotalAmount`, `RemainingBalance`, `AmountInWords`) VALUES
-(5001, 1, 1, 1001, NULL, '2024-02-12', 'PARTIAL', 420000.00, 120000.00, 'Four Hundred Twenty Thousand Taka'),
-(5002, 3, 2, 1003, NULL, '2024-02-22', 'PAID', 612000.00, 0.00, 'Six Hundred Twelve Thousand Taka'),
-(5003, 1, 1, NULL, 1, '2024-03-01', 'DUE', 210000.00, 210000.00, 'Two Hundred Ten Thousand Taka'),
-(5004, 4, 4, NULL, 4, '2024-03-12', 'PAID', 288000.00, 0.00, 'Two Hundred Eighty Eight Thousand Taka');
+-- StockApplied is 0 on the sample rows: they are history imported with the
+-- stock figures that already reflect them, so deleting one must not add stock
+-- back that the database never took out.
+INSERT INTO `invoice` (`InvoiceNo`, `BranchID`, `ClientID`, `QuotationNo`, `OrderID`, `InvoiceDate`, `PaymentStatus`, `StockApplied`, `TotalAmount`, `RemainingBalance`, `AmountInWords`) VALUES
+(5001, 1, 1, 1001, NULL, '2024-02-12', 'PARTIAL', 0, 420000.00, 120000.00, 'Four Hundred Twenty Thousand Taka'),
+(5002, 3, 2, 1003, NULL, '2024-02-22', 'PAID', 0, 612000.00, 0.00, 'Six Hundred Twelve Thousand Taka'),
+(5003, 1, 1, NULL, 1, '2024-03-01', 'DUE', 0, 210000.00, 210000.00, 'Two Hundred Ten Thousand Taka'),
+(5004, 4, 4, NULL, 4, '2024-03-12', 'PAID', 0, 288000.00, 0.00, 'Two Hundred Eighty Eight Thousand Taka');
 
 -- ===========================================================================
 -- 14. invoice_item — one line of an invoice
@@ -438,15 +458,20 @@ CREATE TABLE `po_item` (
   `PONo` int(11) NOT NULL,
   `ProductID` int(11) NOT NULL,
   `Quantity` int(11) NOT NULL,
+  `ReceivedQty` int(11) NOT NULL DEFAULT 0
+    COMMENT 'Units already received into stock; receiving is capped at Quantity - ReceivedQty',
   `WholesaleUnitPrice` decimal(12,2) NOT NULL,
   `TotalPrice` decimal(12,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-INSERT INTO `po_item` (`POItemID`, `PONo`, `ProductID`, `Quantity`, `WholesaleUnitPrice`, `TotalPrice`) VALUES
-(1, 9001, 1, 10, 120000.00, 1200000.00),
-(2, 9002, 2, 20, 54000.00, 1080000.00),
-(3, 9003, 3, 10, 84000.00, 840000.00),
-(4, 9004, 4, 50, 9000.00, 450000.00);
+-- The sample purchase orders are history (January–February 2024) and the
+-- sample stock already reflects them, so each line is marked fully received.
+-- New purchase orders start at 0 and are received through the back office.
+INSERT INTO `po_item` (`POItemID`, `PONo`, `ProductID`, `Quantity`, `ReceivedQty`, `WholesaleUnitPrice`, `TotalPrice`) VALUES
+(1, 9001, 1, 10, 10, 120000.00, 1200000.00),
+(2, 9002, 2, 20, 20, 54000.00, 1080000.00),
+(3, 9003, 3, 10, 10, 84000.00, 840000.00),
+(4, 9004, 4, 50, 50, 9000.00, 450000.00);
 
 -- ===========================================================================
 -- Keys and indexes
@@ -594,6 +619,44 @@ ALTER TABLE `purchase_order`
 ALTER TABLE `po_item`
   ADD CONSTRAINT `po_item_ibfk_1` FOREIGN KEY (`PONo`) REFERENCES `purchase_order` (`PONo`) ON DELETE CASCADE,
   ADD CONSTRAINT `po_item_ibfk_2` FOREIGN KEY (`ProductID`) REFERENCES `product` (`ProductID`);
+
+-- ===========================================================================
+-- Upgrade block — the ONE place an existing database is brought up to date
+-- ===========================================================================
+-- Everything above rebuilds the database. Everything in this block only adds
+-- columns that a database created by an older version of this file does not
+-- have, and it changes no rows. Run just these lines (see the header for the
+-- one-line command) when you have data you cannot lose.
+--
+-- In a full import it is a no-op: the CREATE TABLE statements above already
+-- include these columns, and IF NOT EXISTS makes the ALTER statements skip.
+-- Safe to run any number of times.
+--
+--   po_item.ReceivedQty      what has actually arrived, so a purchase-order
+--                            line can be received in parts and never twice
+--   invoice.StockApplied     whether this invoice already moved bulk stock,
+--                            so deleting it only puts back what was taken
+--   quotation.Contact*       who asked, for a visitor with no client contact
+-- ===========================================================================
+
+-- BEGIN UPGRADE
+ALTER TABLE `po_item`
+  ADD COLUMN IF NOT EXISTS `ReceivedQty` int(11) NOT NULL DEFAULT 0
+    COMMENT 'Units already received into stock; receiving is capped at Quantity - ReceivedQty'
+    AFTER `Quantity`;
+
+ALTER TABLE `invoice`
+  ADD COLUMN IF NOT EXISTS `StockApplied` tinyint(1) NOT NULL DEFAULT 0
+    COMMENT '1 = this invoice already moved bulk stock (product.StockQty); deleting it puts that stock back'
+    AFTER `PaymentStatus`;
+
+ALTER TABLE `quotation`
+  ADD COLUMN IF NOT EXISTS `ContactName` varchar(255) DEFAULT NULL
+    COMMENT 'Who asked, as entered — walk-in visitors have no client contact of their own'
+    AFTER `Subject`,
+  ADD COLUMN IF NOT EXISTS `ContactEmail` varchar(255) DEFAULT NULL AFTER `ContactName`,
+  ADD COLUMN IF NOT EXISTS `ContactPhone` varchar(50) DEFAULT NULL AFTER `ContactEmail`;
+-- END UPGRADE
 
 -- ===========================================================================
 -- Triggers

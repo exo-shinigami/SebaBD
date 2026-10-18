@@ -1119,6 +1119,24 @@ function db_update(PDO $pdo, string $table, array $data, array $where): int
 }
 
 /**
+ * Move a product's bulk quantity by $delta (+in, -out).
+ *
+ * Only bulk products use product.StockQty; serialized products are counted by
+ * their product_instance rows instead, so callers check IsSerialized first.
+ * The arithmetic happens inside SQL so two invoices raised at the same moment
+ * cannot overwrite each other's stock movement.
+ */
+function adjust_product_stock(PDO $pdo, int $productId, int $delta): void
+{
+    if ($delta === 0 || $productId <= 0) {
+        return;
+    }
+
+    $stmt = $pdo->prepare('UPDATE product SET StockQty = StockQty + :delta WHERE ProductID = :id');
+    $stmt->execute([':delta' => $delta, ':id' => $productId]);
+}
+
+/**
  * DELETE rows matched by an associative $where. Callers check dependent rows
  * first, because several foreign keys are RESTRICT on purpose.
  */

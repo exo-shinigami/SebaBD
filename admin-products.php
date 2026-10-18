@@ -526,13 +526,21 @@ echo admin_lead('Products', 'The sellable catalog. Each product has exactly one 
           <h2 class="report-panel-title">Where it has been used</h2>
         </div>
         <?php
+        // Distinct placeholders: PDO's native prepares reject a named parameter
+        // used twice, and the silently empty result made every count here zero.
         $usage = db_fetch_all(
-            'SELECT (SELECT COUNT(*) FROM order_item     WHERE ProductID = :id) AS OrderLines,
-                    (SELECT COUNT(*) FROM quotation_item WHERE ProductID = :id) AS QuoteLines,
-                    (SELECT COUNT(*) FROM invoice_item   WHERE ProductID = :id) AS InvoiceLines,
-                    (SELECT COUNT(*) FROM po_item        WHERE ProductID = :id) AS PoLines,
-                    (SELECT COUNT(*) FROM product_instance WHERE ProductID = :id) AS Units',
-            [':id' => (int) $edit['ProductID']]
+            'SELECT (SELECT COUNT(*) FROM order_item     WHERE ProductID = :order_lines) AS OrderLines,
+                    (SELECT COUNT(*) FROM quotation_item WHERE ProductID = :quote_lines) AS QuoteLines,
+                    (SELECT COUNT(*) FROM invoice_item   WHERE ProductID = :invoice_lines) AS InvoiceLines,
+                    (SELECT COUNT(*) FROM po_item        WHERE ProductID = :po_lines) AS PoLines,
+                    (SELECT COUNT(*) FROM product_instance WHERE ProductID = :units) AS Units',
+            [
+                ':order_lines'   => (int) $edit['ProductID'],
+                ':quote_lines'   => (int) $edit['ProductID'],
+                ':invoice_lines' => (int) $edit['ProductID'],
+                ':po_lines'      => (int) $edit['ProductID'],
+                ':units'         => (int) $edit['ProductID'],
+            ]
         );
         $u = $usage[0] ?? [];
         ?>

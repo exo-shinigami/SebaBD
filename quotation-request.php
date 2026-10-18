@@ -64,6 +64,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($subject === '') $errors[] = 'Please give the quotation a short subject.';
 
+    // A visitor is not signed in, so the only contact details the sales team
+    // will have are the ones typed here. Check them, and insist on at least one
+    // way to answer the request.
+    if ($filedUnder === 'walkin') {
+        if ($contact === '') {
+            $errors[] = 'Please tell us who is asking — your name goes on the quotation.';
+        }
+        if ($contactEm === '' && $contactPh === '') {
+            $errors[] = 'Add an email address or a phone number so the sales team can send you the quotation.';
+        }
+    }
+    if ($contactEm !== '' && !filter_var($contactEm, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'That contact email address does not look valid.';
+    }
+    if ($contactPh !== '' && !is_valid_phone($contactPh)) {
+        $errors[] = 'That contact phone number looks invalid.';
+    }
+
     // Branch is required only for a B2B company (which always has at least the
     // branch created at registration).
     if ($filedUnder === 'client' && !$branches) {
@@ -178,6 +196,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'ClientID'      => $clientId,
                     'QuotationDate' => date('Y-m-d'),
                     'Subject'       => $subject,
+                    // Snapshot of the person who asked. A walk-in visitor has
+                    // no client contact of their own, so without this the sales
+                    // team could see the request but not who sent it.
+                    'ContactName'   => $contact !== '' ? $contact : ($client['ContactPerson'] ?? null),
+                    'ContactEmail'  => $contactEm !== '' ? $contactEm : ($client['Email'] ?? null),
+                    'ContactPhone'  => $contactPh !== '' ? $contactPh : ($client['Phone'] ?? null),
                     'TotalAmount'   => $total,
                     'AmountInWords' => amount_in_words($total),
                     'Status'        => 'Pending',
@@ -203,10 +227,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             clear_old();
 
             $flash = 'Quotation #' . $result['no'] . ' submitted — total ' . money($result['total']) . '. '
-                . 'Our sales team will contact you within 1 business day.';
+                . ($user
+                    ? 'It is now listed under “My quotations” on your dashboard while our team prices it.'
+                    : 'Our sales team will contact you within 1 business day.');
             flash_set('success', $flash);
+            // A signed-in customer can follow the request on the dashboard; a
+            // visitor has no document list to follow, so the form is the right
+            // place to stay (with the reference number in the flash).
             // AJAX callers get {ok:true, redirect:…} instead of a 302.
-            post_success('quotation-request.php');
+            post_success($user ? 'dashboard.php' : 'quotation-request.php');
         } catch (Throwable $e) {
             error_log('[SebaBD] Quotation request failed: ' . $e->getMessage());
             $errors[] = 'Could not submit the quotation. ' . (APP_DEBUG ? $e->getMessage() : 'Please try again.');

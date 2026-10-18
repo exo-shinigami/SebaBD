@@ -38,8 +38,9 @@ results.
 
 ### Requirements
 
-- Windows with XAMPP (verified with XAMPP 8.2.12 and MariaDB 10.4.32), or any PHP 8.1+ / MySQL
-  environment.
+- Windows with XAMPP (verified with XAMPP 8.2.12 and MariaDB 10.4.32), or any PHP 8.1+ /
+  MySQL-compatible server. XAMPP's MariaDB is what is tested; see the note below the upgrade
+  block if you run MySQL 8.
 - PHP extensions: `pdo_mysql` (required), `mbstring` (used by form validation).
 - Internet access for the Bootstrap, Font Awesome and Google Charts CDNs used by the pages.
 
@@ -56,20 +57,41 @@ From the project root:
 C:\xampp\mysql\bin\mysql.exe -u root < database\e_commerce.sql
 ```
 
-That one file is the whole database: it creates the `e_commerce` database, all 17 tables,
+That one file is the whole fresh database: it creates the `e_commerce` database, all 17 tables,
 their keys, foreign keys, `CHECK` constraints and triggers, **and** a small set of realistic
-sample rows (including the sample logins below). There is no schema-only variant and no
-migration step — this is the single source of truth for the design.
+sample rows (including the sample logins below). It is the single source of truth for the design.
+
+If you already have a database with data you want to keep, **do not import the whole file** — it
+rebuilds the tables from scratch. The same file contains an `UPGRADE` block that only adds
+columns newer code expects and changes no rows. Run just that block against your database:
+
+```bash
+sed -n '/^-- BEGIN UPGRADE/,/^-- END UPGRADE/p' database/e_commerce.sql | mysql -u root e_commerce
+```
+
+| Upgrade block adds | Why |
+| --- | --- |
+| `po_item.ReceivedQty` | Partial purchase-order receiving; a line cannot be received twice |
+| `invoice.StockApplied` | Remember whether the invoice moved bulk stock, so deleting it restores only what it took |
+| `quotation.ContactName/Email/Phone` | Who asked, for a visitor with no company contact record |
+
+The block is idempotent (safe to run twice) and is a no-op during a full import, because the
+`CREATE TABLE` statements already include those columns. The back office shows a warning banner
+when the database is behind the code, so a missing column is visible rather than silent.
+
+The block uses MariaDB's `ADD COLUMN IF NOT EXISTS`, which XAMPP ships. On MySQL 8, run the same
+`ALTER TABLE` statements without `IF NOT EXISTS` and skip any column that already exists.
 
 The script is re-runnable: it drops the 17 tables it owns and rebuilds them, so importing it
 again gives the same clean result instead of failing with *table already exists*.
 
 The file always works on `e_commerce` — it contains `CREATE DATABASE IF NOT EXISTS` and
 `USE e_commerce`, so naming a different database on the command line does **not** redirect it.
-To rehearse an import against a scratch schema without touching the live one, swap that one
-line:
+To rehearse an import against a scratch schema without touching the live one, create an empty
+database and swap the `USE` line:
 
 ```bash
+mysql -u root -e 'CREATE DATABASE e_commerce_test'
 sed 's/^USE `e_commerce`;/USE `e_commerce_test`;/' database/e_commerce.sql | mysql -u root
 ```
 
@@ -559,14 +581,17 @@ it only exists as part of a header, so `OrderID` cascades.
 
 #### B2B quotations
 
-**`quotation`** — a priced offer issued to a company branch.
+**`quotation`** — a priced offer prepared for a customer. `ClientID` is the owner; the branch
+is optional address detail (individuals have none).
 
 | Column | Type | Key | Notes |
 | --- | --- | --- | --- |
 | `QuotationNo` | `int` | PK | Document number, e.g. `1001` |
-| `BranchID` | `int` | FK → `client_branch` | `RESTRICT`; corporate identity lives here |
+| `BranchID` | `int` | FK → `client_branch` | `NULL` for an individual or a branchless request |
+| `ClientID` | `int` | FK → `client` | Who the offer is prepared for — the ownership link |
 | `QuotationDate` | `date` | | |
 | `Subject` | `varchar(255)` | | e.g. `10 office workstations` |
+| `ContactName`, `ContactEmail`, `ContactPhone` | `varchar` | | Snapshot of who asked — required for a visitor with no company account, so the sales team can reply |
 | `TotalAmount` | `decimal(12,2)` | | Header total; equals the sum of its items |
 | `AmountInWords` | `text` | | Printed wording, produced by `amount_in_words()` |
 | `Status` | `varchar(50)` | | Defaults to `Pending`; also `Accepted`, `Rejected` |
@@ -598,6 +623,7 @@ quotation, or from neither (a manually raised invoice), which is why both links 
 | `OrderID` | `int` | FK → `order`, UK | `NULL` for quotation invoices |
 | `InvoiceDate` | `date` | | |
 | `PaymentStatus` | `varchar(50)` | | Defaults to `DUE`; also `PARTIAL`, `PAID` |
+| `StockApplied` | `tinyint(1)` | | `1` when this invoice moved bulk stock; deleting it then puts that stock back. Sample history stays `0` so an old invoice never invents stock |
 | `TotalAmount` | `decimal(12,2)` | | Amount billed |
 | `RemainingBalance` | `decimal(12,2)` | | Amount still owed; `0.00` once paid |
 | `AmountInWords` | `text` | | Printed wording |
@@ -648,6 +674,7 @@ named `WholesaleUnitPrice` and not just `UnitPrice`.
 | `POItemID` | `int` | PK | |
 | `PONo` | `int` | FK → `purchase_order` | `ON DELETE CASCADE` |
 | `ProductID` | `int` | FK → `product` | `RESTRICT` |
+| `ReceivedQty` | `int` | | How much of `Quantity` has arrived; receiving is capped at the difference, so a line cannot be received twice |
 | `Quantity` | `int` | | |
 | `WholesaleUnitPrice` | `decimal(12,2)` | | Vendor cost per unit at purchase time |
 | `TotalPrice` | `decimal(12,2)` | | `Quantity × WholesaleUnitPrice` |
@@ -884,7 +911,8 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 
 | File / folder | Responsibility |
 | --- | --- |
-| `database/e_commerce.sql` | The whole database: schema, keys, constraints, triggers and the sample data set |
+| `database/e_commerce.sql` | The whole fresh database: schema, keys, constraints, triggers and the sample data set |
+
 | `reports/bootstrap.php` | Report base class, catalogue, permissions, page wrapper |
 | `reports/*Report.php` | Report SQL and data preparation |
 | `reports/*.view.php` | Report markup (tables, charts, KPIs) |
@@ -930,8 +958,11 @@ applies to a basket that is already open.
 | Checkout | Requires a signed-in user. Guests are sent to `login.php?next=cart.php` and come straight back with the basket intact |
 | Order | One `order` row for the customer plus one `order_item` per line, written in a single transaction; the basket is emptied and the customer lands on `order-detail.php` |
 
-Stock is **not** decremented at checkout. It moves when the invoice is raised and units are
-attached (`admin-invoices.php`), so the paperwork and the shelf always agree.
+Stock is **not** decremented at checkout — a basket and an order are intentions, not a sale.
+It moves when the invoice is raised (`admin-invoices.php`): a bulk line reduces
+`product.StockQty` by its quantity, and a serialized line marks the exact units Sold when they
+are attached. Deleting the invoice puts the bulk quantity back and returns attached devices to
+stock, so the paperwork and the shelf always agree.
 
 ### Back office
 
@@ -949,9 +980,12 @@ Two rules the modules enforce rather than suggest:
 
 - A category that still holds products cannot be deleted, and a product that has been sold or
   quoted cannot be deleted either — the pages offer deactivation instead.
-- Receiving a purchase order is the bridge back into sellable stock: a bulk line adds to
-  `product.StockQty`, a serialized line creates one `product_instance` per serial number with
-  its warranty clock started from the purchase date.
+- Receiving a purchase order is the bridge back into sellable stock: a bulk line adds the
+  delivered quantity to `product.StockQty`, a serialized line creates one `product_instance`
+  per serial number with its warranty clock started from the purchase date. Deliveries can be
+  recorded in parts, the page shows what is still outstanding, and a line that is fully
+  received refuses further receiving. Once stock has arrived the order's lines are locked, so
+  the receiving record cannot be rewritten.
 
 ### Printed documents
 
@@ -961,8 +995,8 @@ and sign-off can never drift apart between document types.
 
 | Document | Who may open it |
 | --- | --- |
-| Quotation | Staff, and the customer whose company owns the branch it is addressed to |
-| Invoice | Same rule — a customer cannot read another company's paperwork by guessing a number |
+| Quotation | Staff, and the customer the offer was prepared for (`quotation.ClientID`) |
+| Invoice | Same rule — a customer cannot read another customer's paperwork by guessing a number |
 | Purchase order | Staff with buying rights (Admin, Inventory Manager) only: it exposes supplier cost prices |
 
 The invoice adds the receipts recorded against it (with the balance after each one) and the

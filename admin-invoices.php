@@ -96,6 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $errors[] = 'Enter the amount received — it must be more than zero.';
             } elseif (strtotime($date) === false) {
                 $errors[] = 'The receipt date is not valid.';
+            } elseif (strtotime($date) > strtotime(date('Y-m-d'))) {
+                $errors[] = 'A payment cannot be received in the future — choose today or an earlier date.';
             } elseif ($received + $amount - 0.009 > (float) $invoice[0]['TotalAmount']) {
                 $over = $received + $amount - (float) $invoice[0]['TotalAmount'];
                 $errors[] = 'That receipt is more than the invoice is worth by ' . money($over)
@@ -129,6 +131,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (Throwable $e) {
             $errors[] = admin_error_message($e, 'Could not record the payment.');
+        }
+        $action = 'view';
+        $_GET['no'] = (string) $invoiceNo;
+    } elseif ($intent === 'receipt_delete') {
+        /* -------------------------------------------- reverse a mis-keyed payment
+         * A receipt is the record of money received, so it is corrected by
+         * deleting the row and recomputing the invoice from the receipts that
+         * remain — never by typing a negative payment. Later receipts' running
+         * balances are recalculated too, so the statement reads correctly.
+         */
+        $receiptNo = post_int('receipt_no');
+        $invoiceNo = post_int('invoice_no');
+
+        try {
+            $receipt = db_fetch_all(
+                'SELECT r.ReceiptNo, r.InvoiceNo, r.AmountReceived, i.TotalAmount
+                 FROM payment_receipt r JOIN invoice i ON i.InvoiceNo = r.InvoiceNo
+                 WHERE r.ReceiptNo = :id AND r.InvoiceNo = :inv',
+                [':id' => $receiptNo, ':inv' => $invoiceNo]
+            );
+
+            if (!$receipt) {
+                $errors[] = 'That receipt no longer exists.';
+            } else {
+                $total = (float) $receipt[0]['TotalAmount'];
+                db_transaction($pdo, function (PDO $tx) use ($receiptNo, $invoiceNo, $total) {
+                    db_delete($tx, 'payment_receipt', ['ReceiptNo' => $receiptNo]);
+
+                    $left = db_fetch_all(
+                        'SELECT ReceiptNo, AmountReceived FROM payment_receipt
+                         WHERE InvoiceNo = :id ORDER BY ReceiptDate, ReceiptNo',
+                        [':id' => $invoiceNo]
+                    );
+                    $running  = $total;
+                    $received = 0.0;
+                    foreach ($left as $row) {
+                        $running  = round($running - (float) $row['AmountReceived'], 2);
+                        $received += (float) $row['AmountReceived'];
+                        db_update($tx, 'payment_receipt',
+                            ['RemainingDueAfterReceipt' => $running],
+                            ['ReceiptNo' => (int) $row['ReceiptNo']]);
+                    }
+
+                    db_update($tx, 'invoice', [
+                        'RemainingBalance' => $running,
+                        'PaymentStatus'    => derive_payment_status($total, $received),
+                    ], ['InvoiceNo' => $invoiceNo]);
+                });
+
+                flash_set('success', 'Receipt #' . $receiptNo . ' reversed — invoice #' . $invoiceNo
+                    . ' now shows its true balance again.');
+                post_success('admin-invoices.php?action=view&no=' . $invoiceNo);
+            }
+        } catch (Throwable $e) {
+            $errors[] = admin_error_message($e, 'Could not reverse that receipt.');
         }
         $action = 'view';
         $_GET['no'] = (string) $invoiceNo;
@@ -251,18 +308,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'SELECT EquipmentID FROM invoice_item WHERE InvoiceNo = :id AND EquipmentID IS NOT NULL',
                     [':id' => $invoiceNo]
                 );
-                db_transaction($pdo, function (PDO $tx) use ($invoiceNo, $units) {
+                $bulk = db_fetch_all(
+                    'SELECT ii.ProductID, ii.Quantity, p.IsSerialized
+                     FROM invoice_item ii JOIN product p ON p.ProductID = ii.ProductID
+                     WHERE ii.InvoiceNo = :id AND ii.EquipmentID IS NULL',
+                    [':id' => $invoiceNo]
+                );
+                $flagRow = db_fetch_all(
+                    'SELECT StockApplied FROM invoice WHERE InvoiceNo = :id',
+                    [':id' => $invoiceNo]
+                );
+                $applied = (int) ($flagRow[0]['StockApplied'] ?? 0);
+                db_transaction($pdo, function (PDO $tx) use ($invoiceNo, $units, $bulk, $applied) {
                     // Returning the devices to stock keeps the stock position
                     // honest when a sale is undone.
                     foreach ($units as $unit) {
                         db_update($tx, 'product_instance', ['Status' => 'In Stock'],
                             ['EquipmentID' => (int) $unit['EquipmentID']]);
                     }
+                    // Bulk lines put their quantity back, but only for invoices
+                    // this application moved stock for (see StockApplied).
+                    if ($applied === 1) {
+                        foreach ($bulk as $line) {
+                            if ((int) $line['IsSerialized'] === 0) {
+                                adjust_product_stock($tx, (int) $line['ProductID'], (int) $line['Quantity']);
+                            }
+                        }
+                    }
                     db_delete($tx, 'invoice_item', ['InvoiceNo' => $invoiceNo]);
                     db_delete($tx, 'invoice', ['InvoiceNo' => $invoiceNo]);
                 });
                 flash_set('success', 'Invoice #' . $invoiceNo . ' deleted'
-                    . ($units ? ' and ' . count($units) . ' serialized unit(s) returned to stock' : '') . '.');
+                    . ($units ? ' and ' . count($units) . ' serialized unit(s) returned to stock' : '')
+                    . ($applied === 1 && $bulk ? ' and its bulk quantities put back on the shelf' : '') . '.');
                 post_success('admin-invoices.php');
             }
         } catch (Throwable $e) {
@@ -305,7 +383,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!isset($catalogPrices[$productId])) {
                 $found = db_fetch_all(
-                    'SELECT ProductID, ProductName, StandardPrice FROM product WHERE ProductID = :id',
+                    'SELECT ProductID, ProductName, StandardPrice, IsSerialized FROM product WHERE ProductID = :id',
                     [':id' => $productId]
                 );
                 $catalogPrices[$productId] = $found[0] ?? null;
@@ -327,20 +405,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Add at least one product line — an invoice with no lines has no value.';
         }
 
-        // A quotation can only become one invoice, and one that still exists.
-        if (!$errors && $quotation > 0 && $editNo === 0) {
-            $already = db_count('invoice', 'QuotationNo = :q', [':q' => $quotation]);
-            if ($already > 0) {
+        // A quotation can only become one invoice, it must still exist, and a
+        // quotation the customer rejected or let expire is not a sale.
+        if (!$errors && $quotation > 0) {
+            if ($editNo === 0 && db_count('invoice', 'QuotationNo = :q', [':q' => $quotation]) > 0) {
                 $errors[] = 'Quotation #' . $quotation . ' already has an invoice. A quotation converts once.';
+            }
+            $quoteRow = db_fetch_all(
+                'SELECT QuotationNo, Status, ClientID, COALESCE(BranchID, 0) AS BranchID
+                 FROM quotation WHERE QuotationNo = :id',
+                [':id' => $quotation]
+            );
+            if (!$quoteRow) {
+                $errors[] = 'Quotation #' . $quotation . ' does not exist.';
+            } elseif (in_array((string) $quoteRow[0]['Status'], ['Rejected', 'Expired'], true)) {
+                $errors[] = 'Quotation #' . $quotation . ' is ' . strtolower((string) $quoteRow[0]['Status'])
+                          . ', so it cannot be invoiced. Re-quote the customer, or set the quotation to Accepted first.';
             }
         }
         if (!$errors && $orderId > 0) {
-            $existingOrder = db_fetch_all('SELECT OrderID FROM `order` WHERE OrderID = :id', [':id' => $orderId]);
+            $existingOrder = db_fetch_all(
+                'SELECT o.OrderID, o.OrderStatus, c.ClientID
+                 FROM `order` o LEFT JOIN client c ON c.UserID = o.UserID
+                 WHERE o.OrderID = :id',
+                [':id' => $orderId]
+            );
             if (!$existingOrder) {
                 $errors[] = 'Order #' . $orderId . ' does not exist.';
-            }
-            if (db_count('invoice', 'OrderID = :o', [':o' => $orderId]) > 0) {
+            } elseif ((string) $existingOrder[0]['OrderStatus'] === 'Cancelled') {
+                $errors[] = 'Order #' . $orderId . ' was cancelled, so it cannot be invoiced. '
+                          . 'Ask the customer to place a new order.';
+            } elseif ($editNo === 0 && db_count('invoice', 'OrderID = :o', [':o' => $orderId]) > 0) {
+                // On an edit the order already points at this same invoice — only
+                // a *second* invoice for the order is a conflict.
                 $errors[] = 'Order #' . $orderId . ' already has an invoice. An order is invoiced once.';
+            }
+        }
+
+        // The billed branch must belong to the customer the document is for.
+        // Without this check a tampered form could bill one company's office
+        // while the invoice is owned by another company.
+        if (!$errors && $branchId > 0) {
+            $branchOwner = db_fetch_all(
+                'SELECT ClientID FROM client_branch WHERE BranchID = :id',
+                [':id' => $branchId]
+            );
+            if (!$branchOwner) {
+                $errors[] = 'The billing branch does not exist.';
+            } else {
+                $expectedOwner = null;
+                if ($quotation > 0 && !empty($quoteRow)) {
+                    $expectedOwner = (int) $quoteRow[0]['ClientID'];
+                } elseif ($orderId > 0 && !empty($existingOrder)) {
+                    $expectedOwner = (int) ($existingOrder[0]['ClientID'] ?? 0) ?: null;
+                }
+                if ($expectedOwner !== null && (int) $branchOwner[0]['ClientID'] !== $expectedOwner) {
+                    $errors[] = 'That branch belongs to a different customer than the document. '
+                              . 'Choose a branch of the same company.';
+                }
             }
         }
 
@@ -374,6 +496,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'QuotationNo'      => $quotation > 0 ? $quotation : null,
                         'OrderID'          => $orderId > 0 ? $orderId : null,
                         'InvoiceDate'      => $invoiceDate,
+                        'StockApplied'     => 1,
                         'TotalAmount'      => $total,
                         'RemainingBalance' => $total,
                         'PaymentStatus'    => 'DUE',
@@ -382,7 +505,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($editNo > 0) {
                         $existing = db_fetch_all(
-                            'SELECT InvoiceNo, TotalAmount FROM invoice WHERE InvoiceNo = :id',
+                            'SELECT InvoiceNo, TotalAmount, StockApplied FROM invoice WHERE InvoiceNo = :id',
                             [':id' => $editNo]
                         );
                         if (!$existing) {
@@ -407,6 +530,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         );
                         if ((int) ($attached[0]['n'] ?? 0) > 0) {
                             throw new RuntimeException('has-units');
+                        }
+
+                        // The old lines are about to disappear: put their bulk
+                        // quantities back first, but only if this invoice took
+                        // them out (StockApplied). Then the new lines are taken
+                        // out below, so an edit is a net stock correction.
+                        if ((int) $existing[0]['StockApplied'] === 1) {
+                            $oldLines = db_fetch_all(
+                                'SELECT ii.ProductID, ii.Quantity, p.IsSerialized
+                                 FROM invoice_item ii JOIN product p ON p.ProductID = ii.ProductID
+                                 WHERE ii.InvoiceNo = :id',
+                                [':id' => $editNo]
+                            );
+                            foreach ($oldLines as $old) {
+                                if ((int) $old['IsSerialized'] === 0) {
+                                    adjust_product_stock($tx, (int) $old['ProductID'], (int) $old['Quantity']);
+                                }
+                            }
                         }
 
                         // Changing the lines changes what is owed, so the
@@ -434,6 +575,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             'SoldUnitPrice' => $line['price'],
                             'TotalPrice'    => round($line['price'] * $line['qty'], 2),
                         ]);
+
+                        // A bulk product leaves the shelf when it is invoiced.
+                        // Serialized products do not: their units are counted by
+                        // product_instance, and the invoice page marks the exact
+                        // device Sold when it is attached to the line.
+                        if ((int) ($line['product']['IsSerialized'] ?? 0) === 0) {
+                            adjust_product_stock($tx, (int) $line['product']['ProductID'], -$line['qty']);
+                        }
+                    }
+
+                    // Converting a quotation is the moment the customer said
+                    // yes, so the document is recorded as accepted with it.
+                    if ($quotation > 0) {
+                        db_update($tx, 'quotation', ['Status' => 'Accepted'], ['QuotationNo' => $quotation]);
                     }
 
                     return $invoiceNo;
@@ -605,6 +760,11 @@ if ($dbUp) {
             } elseif ($q[0]['InvoiceNo'] !== null) {
                 flash_set('error', 'Quotation #' . $quoteNo . ' is already invoiced as #' . (int) $q[0]['InvoiceNo'] . '.');
                 header('Location: admin-invoices.php');
+                exit;
+            } elseif (in_array((string) $q[0]['Status'], ['Rejected', 'Expired'], true)) {
+                flash_set('error', 'Quotation #' . $quoteNo . ' is ' . strtolower((string) $q[0]['Status'])
+                    . ', so it cannot be invoiced. Set it to Accepted first if the customer has changed their mind.');
+                header('Location: admin-quotations.php?action=view&id=' . $quoteNo);
                 exit;
             } else {
                 $fromQuotation = $q[0];
@@ -967,8 +1127,8 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
 
       <?= partial_render('partials/admin-list.php', [
           'panel_title' => 'Payment receipts',
-          'panel_sub'   => 'Every payment recorded against this invoice, oldest first.',
-          'columns'     => ['#', 'Date', 'Method', 'Received by', 'Amount', 'Balance after'],
+          'panel_sub'   => 'Every payment recorded against this invoice, oldest first. A mistyped payment is reversed here, never by entering a negative amount.',
+          'columns'     => ['#', 'Date', 'Method', 'Received by', 'Amount', 'Balance after', ''],
           'rows'        => array_map(fn($r) => [
               '<span class="text-muted">' . (int) $r['ReceiptNo'] . '</span>',
               format_date($r['ReceiptDate']),
@@ -976,6 +1136,16 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
               htmlspecialchars((string) $r['ReceivedBy']),
               '<span class="admin-line-total text-success">' . money($r['AmountReceived']) . '</span>',
               '<span class="admin-line-total">' . money($r['RemainingDueAfterReceipt']) . '</span>',
+              '<form method="post" action="admin-invoices.php" class="d-inline"'
+                  . ' onsubmit="return confirm(\'Reverse receipt #' . (int) $r['ReceiptNo'] . ' for '
+                  . htmlspecialchars(money($r['AmountReceived']), ENT_QUOTES) . '? The balance will be recalculated.\');">'
+                  . csrf_field()
+                  . '<input type="hidden" name="intent" value="receipt_delete">'
+                  . '<input type="hidden" name="receipt_no" value="' . (int) $r['ReceiptNo'] . '">'
+                  . '<input type="hidden" name="invoice_no" value="' . (int) $invoice['InvoiceNo'] . '">'
+                  . '<button class="btn btn-sm btn-outline-danger" type="submit">'
+                  . '<i class="fa-solid fa-rotate-left"></i><span class="visually-hidden">Reverse payment</span>'
+                  . '</button></form>',
           ], $receipts),
           'empty_icon'  => 'fa-receipt',
           'empty_title' => 'No payments recorded yet',

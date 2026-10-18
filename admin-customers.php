@@ -39,21 +39,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($intent === 'delete') {
         $deleteId = post_int('client_id');
         try {
-            // client_branch.ClientID is ON DELETE CASCADE, but the branches
-            // themselves may be referenced by quotations and invoices whose
-            // foreign keys are RESTRICT. Count first so the person sees the
-            // real reason instead of a raw constraint error.
+            // client_branch.ClientID is ON DELETE CASCADE, but quotations and
+            // invoices point at the client (and optionally its branch) with
+            // RESTRICT foreign keys. Count the documents the customer owns —
+            // not only the branch-addressed ones, or an individual with no
+            // branch would slip through and fail on a raw constraint error.
             $openQuotes   = (int) (db_fetch_all(
                 'SELECT COUNT(*) AS n FROM quotation q
-                 JOIN client_branch b ON b.BranchID = q.BranchID
-                 WHERE b.ClientID = :id',
-                [':id' => $deleteId]
+                 LEFT JOIN client_branch b ON b.BranchID = q.BranchID
+                 WHERE q.ClientID = :owner OR b.ClientID = :branch_owner',
+                [':owner' => $deleteId, ':branch_owner' => $deleteId]
             )[0]['n'] ?? 0);
             $openInvoices = (int) (db_fetch_all(
                 'SELECT COUNT(*) AS n FROM invoice i
-                 JOIN client_branch b ON b.BranchID = i.BranchID
-                 WHERE b.ClientID = :id',
-                [':id' => $deleteId]
+                 LEFT JOIN client_branch b ON b.BranchID = i.BranchID
+                 WHERE i.ClientID = :owner OR b.ClientID = :branch_owner',
+                [':owner' => $deleteId, ':branch_owner' => $deleteId]
             )[0]['n'] ?? 0);
 
             if ($deleteId <= 0) {
@@ -66,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($openInvoices > 0) {
                     $parts[] = $openInvoices . ' invoice' . ($openInvoices === 1 ? '' : 's');
                 }
-                $errors[] = 'That company still has ' . implode(' and ', $parts)
-                          . ' on its branches, so it cannot be deleted — the sales history must stay readable.';
+                $errors[] = 'That customer still has ' . implode(' and ', $parts)
+                          . ' on file, so it cannot be deleted — the sales history must stay readable.';
             } else {
                 db_transaction($pdo, function (PDO $tx) use ($deleteId) {
                     db_delete($tx, 'client_branch', ['ClientID' => $deleteId]);
@@ -264,13 +265,13 @@ if ($dbUp) {
         'SELECT c.ClientID, c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.UserID,
                 u.Username, u.FullName,
                 (SELECT COUNT(*) FROM client_branch b WHERE b.ClientID = c.ClientID) AS Branches,
-                (SELECT COUNT(*) FROM quotation q JOIN client_branch b ON b.BranchID = q.BranchID
-                  WHERE b.ClientID = c.ClientID) AS Quotes,
-                (SELECT COUNT(*) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID
-                  WHERE b.ClientID = c.ClientID) AS Invoices,
+                -- Ownership is quotation.ClientID / invoice.ClientID, not the
+                -- branch: an individual has no branch, and a company document
+                -- may be filed without one.
+                (SELECT COUNT(*) FROM quotation q WHERE q.ClientID = c.ClientID) AS Quotes,
+                (SELECT COUNT(*) FROM invoice i WHERE i.ClientID = c.ClientID) AS Invoices,
                 (SELECT COALESCE(SUM(i.RemainingBalance), 0) FROM invoice i
-                  JOIN client_branch b ON b.BranchID = i.BranchID
-                  WHERE b.ClientID = c.ClientID AND i.RemainingBalance > 0) AS Outstanding
+                  WHERE i.ClientID = c.ClientID AND i.RemainingBalance > 0) AS Outstanding
          FROM client c
          LEFT JOIN `user` u ON u.UserID = c.UserID' . $whereSql . '
          ORDER BY c.CompanyName
@@ -664,16 +665,22 @@ echo admin_lead('Customers &amp; branches', 'A company owns one or more branch o
           <h2 class="report-panel-title">This company on file</h2>
         </div>
         <?php
+        // Distinct placeholders: PDO's native prepares reject a named parameter
+        // that appears more than once in a statement, and the silently empty
+        // result made this panel read zero for every customer.
         $totals = db_fetch_all(
-            'SELECT (SELECT COUNT(*) FROM quotation q JOIN client_branch b ON b.BranchID = q.BranchID
-                      WHERE b.ClientID = :id) AS Quotes,
-                    (SELECT COUNT(*) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID
-                      WHERE b.ClientID = :id) AS Invoices,
-                    (SELECT COALESCE(SUM(i.TotalAmount), 0) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID
-                      WHERE b.ClientID = :id) AS Billed,
-                    (SELECT COALESCE(SUM(i.RemainingBalance), 0) FROM invoice i JOIN client_branch b ON b.BranchID = i.BranchID
-                      WHERE b.ClientID = :id) AS Due',
-            [':id' => (int) $edit['ClientID']]
+            'SELECT (SELECT COUNT(*) FROM quotation q WHERE q.ClientID = :quotes) AS Quotes,
+                    (SELECT COUNT(*) FROM invoice i WHERE i.ClientID = :invoices) AS Invoices,
+                    (SELECT COALESCE(SUM(i.TotalAmount), 0) FROM invoice i
+                      WHERE i.ClientID = :billed) AS Billed,
+                    (SELECT COALESCE(SUM(i.RemainingBalance), 0) FROM invoice i
+                      WHERE i.ClientID = :due) AS Due',
+            [
+                ':quotes'   => (int) $edit['ClientID'],
+                ':invoices' => (int) $edit['ClientID'],
+                ':billed'   => (int) $edit['ClientID'],
+                ':due'      => (int) $edit['ClientID'],
+            ]
         );
         $t = $totals[0] ?? [];
         ?>

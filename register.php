@@ -105,7 +105,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_id'] = $userId; // log the new user straight in
                 flash_set('success', 'Welcome to SebaBD, ' . $fullName . '! Your account is ready.');
                 // AJAX callers get {ok:true, redirect:…} instead of a 302.
-                post_success('index.php');
+                // A new customer lands on the dashboard: it shows the account,
+                // the basket shortcut and what happens next, instead of
+                // dropping them back on the shopfront with no orientation.
+                post_success('dashboard.php');
             } catch (PDOException $e) {
                 if ($pdo->inTransaction()) {
                     $pdo->rollBack();
