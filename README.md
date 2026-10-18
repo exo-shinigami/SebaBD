@@ -156,20 +156,25 @@ Roles belong to SebaBD staff only. A customer login — an individual registered
 `RoleID = NULL` and no staff privileges. Staff roles can only be assigned by an administrator
 in `admin-users.php`; public registration never grants them. Staff accounts also cannot order
 from the storefront or request quotations — those are customer actions, refused server-side
-(`refuse_staff_order()` in `helpers.php`), not merely hidden in the UI.
+(`refuse_staff_order()` / `refuse_quotation_request()` in `helpers.php`), not merely hidden in the UI.
+Individual customer accounts also cannot request quotations: the storefront hides every quotation link
+and button for them, and `quotation-request.php` answers a typed URL with a 403. Quotations are a
+company (B2B) flow, plus the walk-in path for a signed-out visitor.
 
 ### Walk-in, customer and internal work
 
 Every quotation is filed to an owner and, where one exists, a branch, and the application
-decides that from who is acting — never from what the form posted. Three paths share the
-same form:
+decides that from who is acting — never from what the form posted. Individual customer
+accounts do not request quotations at all (the option is hidden and `refuse_quotation_request()`
+rejects a typed URL); quotations that already exist for an individual stay readable on their
+dashboard. Two paths share the form:
 
 | Who is acting | Quotation owner (`quotation.ClientID`) | Quotation branch (`quotation.BranchID`) | Order |
 | --- | --- | --- | --- |
 | A visitor with no account | the **Walk-in Customers** house account | `Dhaka Sales Counter` | — (orders need a login) |
-| A signed-in **individual** customer | their own `client` record (`AccountType = 'individual'`) | `NULL` — individuals have no branch | `Retail`, `BranchID` `NULL` — the order hangs off the account |
+| A signed-in **individual** customer | — quotation requests are not available | — | `Retail`, `BranchID` `NULL` — the order hangs off the account |
 | A signed-in **B2B** contact | their company's `client` record (`AccountType = 'b2b'`) | one of that company's branches | `Retail`, `BranchID` `NULL` |
-| A signed-in staff member | — staff do not order or request quotations (`refuse_staff_order()`) | — | `Internal` rows exist only as history |
+| A signed-in staff member | — staff do not order or request quotations (`refuse_staff_order()` / `refuse_quotation_request()`) | — | `Internal` rows exist only as history |
 
 The two house accounts are ordinary `client` rows with no login (`client.UserID` is `NULL`,
 `AccountType = 'house'`), and they always exist, so the house branch foreign keys can never
@@ -585,12 +590,13 @@ it only exists as part of a header, so `OrderID` cascades.
 #### B2B quotations
 
 **`quotation`** — a priced offer prepared for a customer. `ClientID` is the owner; the branch
-is optional address detail (individuals have none).
+is optional address detail, because a branchless quotation may still exist from before the
+individual customer path was closed.
 
 | Column | Type | Key | Notes |
 | --- | --- | --- | --- |
 | `QuotationNo` | `int` | PK | Document number, e.g. `1001` |
-| `BranchID` | `int` | FK → `client_branch` | `NULL` for an individual or a branchless request |
+| `BranchID` | `int` | FK → `client_branch` | `NULL` for a branchless historical individual quotation |
 | `ClientID` | `int` | FK → `client` | Who the offer is prepared for — the ownership link |
 | `QuotationDate` | `date` | | |
 | `Subject` | `varchar(255)` | | e.g. `10 office workstations` |
@@ -856,8 +862,8 @@ pages refuse gracefully.
 | `logout.php` | Ends the session |
 | `register.php` | Public registration (`Client Account`, role 4) |
 | `b2b-registration.php` | Company + first branch + optional login (`B2B Client Account`, role 5) |
-| `order.php` | Quick order form; accepts `?product=<id>&qty=<n>` to pre-fill a line |
-| `quotation-request.php` | Quotation request form; same pre-fill support |
+| `order.php` | Quick order form for signed-in customers (staff are refused, 403); accepts `?product=<id>&qty=<n>` to pre-fill a line |
+| `quotation-request.php` | Quotation request form for B2B contacts and visitors; individual customer accounts and staff are refused (403); same pre-fill support |
 | `cart.php` | The basket and checkout: add/update/remove lines, then place an order (`order` + `order_item`) from the session cart |
 | `order-detail.php` | One order for its owner (or staff): lines, delivery note, status timeline, invoice links, cancel while pending, reorder |
 | `account.php` | My account: name/username/email/phone, password change, the linked company and its branches, recent orders/quotations/invoices |

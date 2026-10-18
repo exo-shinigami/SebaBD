@@ -238,9 +238,11 @@ $page_title = 'My account';
       </div>
       <div class="d-flex flex-wrap gap-2">
         <a class="btn btn-outline-dark" href="dashboard.php"><i class="fa-solid fa-gauge me-1"></i>Dashboard</a>
+        <?php if (!is_staff_user($me)): ?>
         <a class="btn btn-outline-dark" href="cart.php">
           <i class="fa-solid fa-cart-shopping me-1"></i>Basket<?= cart_count() ? ' (' . cart_count() . ')' : '' ?>
         </a>
+        <?php endif; ?>
         <a class="btn btn-outline-secondary" href="logout.php"><i class="fa-solid fa-right-from-bracket me-1"></i>Sign out</a>
       </div>
     </div>
@@ -428,7 +430,7 @@ $page_title = 'My account';
           </table>
           <?php else: ?>
           <p class="text-muted small mb-0">
-            No quotations yet. <a href="quotation-request.php">Request one</a> and a sales manager will price it.
+            No quotations yet.<?= can_request_quotation() ? ' <a href="quotation-request.php">Request one</a> and a sales manager will price it.' : '' ?>
           </p>
           <?php endif; ?>
         </div>

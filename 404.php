@@ -68,7 +68,9 @@ echo partial_render('partials/header.php', ['page_title' => 'Page not found', 'a
             <?php else: ?>
             <a class="btn btn-outline-dark" href="login.php">Sign in</a>
             <?php endif; ?>
+            <?php if (can_request_quotation()): ?>
             <a class="btn btn-outline-secondary" href="quotation-request.php">Request a quotation</a>
+            <?php endif; ?>
           </div>
         </div>
 

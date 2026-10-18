@@ -21,9 +21,10 @@
               <div class="col-6 col-md-3">
                 <h4 class="h6 text-uppercase small fw-bold mb-3">Services</h4>
                 <ul class="list-unstyled small mb-0">
-                  <?php /* Customer actions — staff are refused by both pages. */ ?>
                   <?php if (!is_staff_user()): ?>
                   <li><a href="order.php">Quick order</a></li>
+                  <?php endif; ?>
+                  <?php if (can_request_quotation()): ?>
                   <li><a href="quotation-request.php">Request quotation</a></li>
                   <?php endif; ?>
                   <li><a href="b2b-registration.php">B2B registration</a></li>

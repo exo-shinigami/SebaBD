@@ -52,11 +52,11 @@ $user = current_user();
               <a class="text-decoration-none text-white text-nowrap d-none d-sm-inline" href="register.php">Create account</a>
               <a class="text-decoration-none text-white text-nowrap d-none d-sm-inline" href="b2b-registration.php">B2B registration</a>
               <?php endif; ?>
-              <?php /* Customer actions. Staff are refused by these pages, so the
-                       links are hidden rather than offered as three dead ends. */ ?>
               <?php if (!is_staff_user($user)): ?>
               <a class="text-decoration-none text-white text-nowrap" href="order.php">Quick order</a>
               <a class="text-decoration-none text-white text-nowrap" href="cart.php">Basket<?= cart_count() > 0 ? ' (' . cart_count() . ')' : '' ?></a>
+              <?php endif; ?>
+              <?php if (can_request_quotation($user)): ?>
               <a class="text-decoration-none text-white text-nowrap d-none d-sm-inline" href="quotation-request.php">Request quotation</a>
               <?php endif; ?>
             </div>
@@ -88,7 +88,7 @@ $user = current_user();
                 <!-- The service links live in the top strip on a wide screen and
                      disappear from it on a phone, so the collapsed menu keeps
                      them reachable instead of stranding the destinations. -->
-                <?php if (!is_staff_user($user)): ?>
+                <?php if (can_request_quotation($user)): ?>
                 <li class="nav-item d-sm-none"><a class="nav-link" href="quotation-request.php">Request quotation</a></li>
                 <?php endif; ?>
                 <li class="nav-item d-sm-none"><a class="nav-link" href="b2b-registration.php">B2B registration</a></li>
@@ -105,8 +105,8 @@ $user = current_user();
                 <button class="btn btn-light" type="submit">Search</button>
                 <div class="search-suggestions d-none" id="search-suggestions" role="listbox" aria-label="Product suggestions"></div>
               </form>
-              <?php $cartCount = cart_count(); ?>
               <?php if (!is_staff_user($user)): ?>
+              <?php $cartCount = cart_count(); ?>
               <a href="cart.php" class="btn btn-accent ms-lg-3 mt-3 mt-lg-0 position-relative cart-btn"
                  aria-label="Basket: <?= $cartCount ?> item<?= $cartCount === 1 ? '' : 's' ?>">
                 <i class="fa-solid fa-cart-shopping"></i>

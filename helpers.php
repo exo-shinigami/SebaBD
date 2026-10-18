@@ -123,6 +123,25 @@ function is_b2b_customer(?array $user = null): bool
     return $client !== null && ($client['AccountType'] ?? '') === 'b2b';
 }
 
+/**
+ * May this visitor ask for a quotation from the storefront?
+ *
+ * Quotation requests are a company (B2B) flow, plus the walk-in path for a
+ * visitor who has not registered yet — their request is filed under the
+ * Walk-in account. Individual customer accounts order directly: they have no
+ * branch and no company paperwork, so the storefront never offers them a
+ * quotation (and quotation-request.php refuses them).
+ */
+function can_request_quotation(?array $user = null): bool
+{
+    $user = $user ?? current_user();
+    if ($user === null) {
+        return true;
+    }
+
+    return !is_staff_user($user) && is_b2b_customer($user);
+}
+
 /* ---------------------------------------------------------- staff roles */
 
 /**
@@ -949,6 +968,41 @@ function system_branch_ids(): array
     }
 
     return $out;
+}
+
+/**
+ * Refuse a storefront quotation request from somebody who may not file one.
+ *
+ * Individual customer accounts order directly (see can_request_quotation()),
+ * and staff never request quotations. Obeys the same 403 + friendly page
+ * convention as refuse_staff_order(), so a typed URL cannot bypass the hidden
+ * buttons.
+ */
+function refuse_quotation_request(?array $user = null): void
+{
+    $user = $user ?? current_user();
+    if (can_request_quotation($user)) {
+        return;
+    }
+
+    if (is_staff_user($user)) {
+        deny_page(
+            403,
+            'Staff accounts do not request quotations',
+            'Quotation requests are a customer action. Prepare and price quotations for '
+            . 'customers from the back office instead.'
+        );
+    }
+
+    deny_page(
+        403,
+        'Quotation requests are for business accounts',
+        'You are signed in as an individual customer, so the storefront is the direct way '
+        . 'to buy. Quotations are prepared for registered companies — register your company '
+        . 'if you are buying on its behalf.',
+        'index.php?all=1#featured-products',
+        'Browse the catalog'
+    );
 }
 
 /* ------------------------------------------------------------- workflow */

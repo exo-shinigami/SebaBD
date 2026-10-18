@@ -300,7 +300,7 @@ if (!$isStaff && $dbUp) {
           <p class="report-panel-sub">The newest orders customers have placed with us.</p>
         </div>
         <?php if (!$recentOrders): ?>
-        <p class="text-muted mb-0">No orders have come in yet. You can place one from <a href="order.php">Quick order</a>.</p>
+        <p class="text-muted mb-0">No customer orders have come in yet.</p>
         <?php else: ?>
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0 report-th">
@@ -487,7 +487,6 @@ if (!$isStaff && $dbUp) {
       <a class="btn btn-outline-dark" href="report-quotations.php">Quotations</a>
       <a class="btn btn-outline-dark" href="report-procurement.php">Procurement</a>
       <a class="btn btn-outline-dark" href="report-stock.php">Stock</a>
-      <a class="btn btn-outline-secondary" href="order.php"><i class="fa-solid fa-cart-shopping me-2"></i>Quick order</a>
       <a class="btn btn-outline-secondary" href="index.php">Storefront</a>
     </div>
   </div>
@@ -568,8 +567,10 @@ if (!$isStaff && $dbUp) {
           <p class="report-panel-sub">Quotation requests we have prepared for your company.</p>
         </div>
         <?php if (!$myQuotes): ?>
-        <p class="text-muted mb-3"><?= $client ? 'No quotations have been prepared for you yet.' : 'Quotations are linked to your customer record — request one and a sales manager will price it.' ?></p>
+        <p class="text-muted mb-3"><?= $client ? 'No quotations have been prepared for you yet.' : 'Quotations are linked to your customer record.' ?></p>
+        <?php if (can_request_quotation($user)): ?>
         <a class="btn btn-outline-dark btn-sm" href="quotation-request.php">Request a quotation</a>
+        <?php endif; ?>
         <?php else: ?>
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0 report-th">
@@ -629,7 +630,9 @@ if (!$isStaff && $dbUp) {
     </div>
     <div class="d-flex flex-wrap gap-2">
       <a class="btn btn-accent" href="order.php"><i class="fa-solid fa-cart-shopping me-2"></i>Quick order</a>
+      <?php if (can_request_quotation($user)): ?>
       <a class="btn btn-outline-dark" href="quotation-request.php"><i class="fa-solid fa-file-invoice me-2"></i>Request quotation</a>
+      <?php endif; ?>
       <a class="btn btn-outline-dark" href="index.php?all=1#featured-products">Browse the catalog</a>
       <?php if (!$client): ?>
       <a class="btn btn-outline-dark" href="b2b-registration.php">Register a company</a>

@@ -1,11 +1,12 @@
 <?php
 require_once __DIR__ . '/helpers.php';
 
-// Quotation requests are a customer action — individual customers, B2B
-// companies and signed-out visitors. Signed-in staff are refused here like
-// everywhere else in the storefront ordering flow.
+// Quotation requests are a company (B2B) flow plus the walk-in path for a
+// signed-out visitor. Individual customer accounts order directly, so this
+// page is not offered to them; both they and signed-in staff are refused here,
+// not merely hidden from the navigation.
 $user = current_user();
-refuse_staff_order($user);
+refuse_quotation_request($user);
 $errors = [];
 
 // ?product=<id>&qty=<n> — product cards and product.php link here so the

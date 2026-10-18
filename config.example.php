@@ -71,12 +71,13 @@ return [
     'email_verification_enabled' => false,
 
     /**
-     * Individual customers (register.php) are not allowed to file a quotation
-     * addressed to the SebaBD House account. Their request is always prepared
-     * for their own account (quotation.ClientID = their own client row,
-     * BranchID = NULL). The setting is on by default and should stay on:
-     * a SebaBD house quotation is the company's own document, not a customer
-     * document.
+     * LEGACY guard for individual customer quotations. Individual accounts can
+     * no longer request quotations at all (can_request_quotation() in
+     * helpers.php, and refuse_quotation_request() on the form), so the form
+     * never files one. The setting is kept so an existing configuration keeps
+     * loading, and it still governs the unreachable individual branch of the
+     * quotation handler. Leave it false: a SebaBD house quotation is the
+     * company's own document, not a customer document.
      */
     'allow_house_quotation_to_individual' => false,
 ];

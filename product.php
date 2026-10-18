@@ -45,9 +45,12 @@ $discount = $wasPrice > 0 ? ($wasPrice - $current) / $wasPrice * 100 : 0.0;
 // Buying and quoting are customer actions. A signed-in staff member browsing
 // the catalog sees the product page without the purchase controls — the
 // write paths refuse them anyway, so hiding here is not the only barrier.
-$canBuy = !is_staff_user();
+// Quotations are a company flow: an individual customer sees the buy controls
+// but no quotation button.
+$canBuy   = !is_staff_user();
+$canQuote = $canBuy && can_request_quotation();
 $orderUrl     = $canBuy ? 'order.php?product=' . $productId . '&qty=1' : '';
-$quotationUrl = $canBuy ? 'quotation-request.php?product=' . $productId . '&qty=1' : '';
+$quotationUrl = $canQuote ? 'quotation-request.php?product=' . $productId . '&qty=1' : '';
 ?>
 <?= partial_render('partials/header.php', ['page_title' => $page_title, 'active_nav' => 'shop']) ?>
 
@@ -132,9 +135,11 @@ $quotationUrl = $canBuy ? 'quotation-request.php?product=' . $productId . '&qty=
               <button class="btn btn-accent btn-lg" type="submit">
                 <i class="fa-solid fa-cart-plus me-2"></i>Add to basket
               </button>
+              <?php if ($canQuote): ?>
               <a class="btn btn-outline-dark btn-lg" href="<?= $quotationUrl ?>">
                 <i class="fa-solid fa-file-invoice me-2"></i>Request quotation
               </a>
+              <?php endif; ?>
             </div>
             <p class="small text-muted mb-4">
               Prefer a single form for a whole order?

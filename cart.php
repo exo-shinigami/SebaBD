@@ -299,7 +299,9 @@ $page_title = 'Your basket';
       <p class="text-muted mb-4">Browse the catalog and add what you need — nothing is ordered until you check out.</p>
       <div class="d-flex flex-wrap gap-2 justify-content-center">
         <a class="btn btn-accent" href="index.php?all=1#featured-products">Browse products</a>
+        <?php if (can_request_quotation()): ?>
         <a class="btn btn-outline-dark" href="quotation-request.php">Request a quotation instead</a>
+        <?php endif; ?>
       </div>
     </div>
 
@@ -482,10 +484,12 @@ $page_title = 'Your basket';
           </form>
           <?php endif; ?>
 
+          <?php if (can_request_quotation()): ?>
           <hr class="my-4">
           <div class="small text-muted">
             <p class="mb-0">Need a formal quote first? <a href="quotation-request.php">Request a quotation</a> and a sales manager will price it for your company.</p>
           </div>
+          <?php endif; ?>
         </div>
       </div>
     </div>
