@@ -157,9 +157,12 @@ Roles belong to SebaBD staff only. A customer login — an individual registered
 in `admin-users.php`; public registration never grants them. Staff accounts also cannot order
 from the storefront or request quotations — those are customer actions, refused server-side
 (`refuse_staff_order()` / `refuse_quotation_request()` in `helpers.php`), not merely hidden in the UI.
-Individual customer accounts also cannot request quotations: the storefront hides every quotation link
+Individual customer accounts also cannot request quotations by default: the storefront hides every quotation link
 and button for them, and `quotation-request.php` answers a typed URL with a 403. Quotations are a
-company (B2B) flow, plus the walk-in path for a signed-out visitor.
+company (B2B) flow, plus the walk-in path for a signed-out visitor. The one exception is the optional
+`allow_individual_quotations` config flag — when it is enabled, an individual customer account can
+request a quotation again; the request is filed under their own client record (`BranchID` `NULL`), so it
+does not create any company or branch for them.
 
 ### Walk-in, customer and internal work
 
@@ -172,7 +175,7 @@ dashboard. Two paths share the form:
 | Who is acting | Quotation owner (`quotation.ClientID`) | Quotation branch (`quotation.BranchID`) | Order |
 | --- | --- | --- | --- |
 | A visitor with no account | the **Walk-in Customers** house account | `Dhaka Sales Counter` | — (orders need a login) |
-| A signed-in **individual** customer | — quotation requests are not available | — | `Retail`, `BranchID` `NULL` — the order hangs off the account |
+| A signed-in **individual** customer | not available by default — see `allow_individual_quotations` | — | `Retail`, `BranchID` `NULL` — the order hangs off the account |
 | A signed-in **B2B** contact | their company's `client` record (`AccountType = 'b2b'`) | one of that company's branches | `Retail`, `BranchID` `NULL` |
 | A signed-in staff member | — staff do not order or request quotations (`refuse_staff_order()` / `refuse_quotation_request()`) | — | `Internal` rows exist only as history |
 
@@ -590,8 +593,9 @@ it only exists as part of a header, so `OrderID` cascades.
 #### B2B quotations
 
 **`quotation`** — a priced offer prepared for a customer. `ClientID` is the owner; the branch
-is optional address detail, because a branchless quotation may still exist from before the
-individual customer path was closed.
+is optional address detail, because a quotation requested by an individual customer is
+branchless by design (`allow_individual_quotations` on) — and older rows from before that
+path was closed look the same.
 
 | Column | Type | Key | Notes |
 | --- | --- | --- | --- |
@@ -786,9 +790,14 @@ sample data is internally consistent:
 - each `invoice` total equals the sum of its `invoice_item` rows;
 - each `purchase_order` total equals the sum of its `po_item` rows;
 - each `invoice.RemainingBalance` equals `TotalAmount − SUM(payment_receipt.AmountReceived)`;
-- prices are realistic taka figures (a business laptop is ৳ 144,000, a 4K monitor ৳ 66,000, a
-  managed switch ৳ 102,000, a wireless mouse ৳ 12,000) and the amounts in words match the
-  currency (`'Four Hundred Twenty Thousand Taka'`);
+- the catalogue is a realistic shop rather than four rows: **56 products across six
+  categories** (laptops, monitors, networking, accessories, printers, storage) with
+  wholesale prices on the purchase orders sitting 11–26 % below the retail list price; (The
+  four `quotation`/`invoice`/`order` sets described above keep their own four-line shapes.)
+- prices are reviewed market figures in taka — an HP ProBook 450 G10 at ৳ 99,500, a Dell
+  UltraSharp 27" 4K at ৳ 125,000, a Cisco CBS350-24T at ৳ 35,000, a Logitech MX Master 3S at
+  ৳ 9,999, a TP-Link Archer C6 at ৳ 3,300 — and the amounts in words match the currency
+  (`'Four Hundred Twenty Thousand Taka'`);
 - companies, contact people and suppliers are plausible businesses (`Meghna Infotech Ltd`,
   `Karnaphuli Logistics Ltd`, `Nexus Digital Distribution Pte Ltd`) instead of placeholders;
 - addresses, phone numbers and payment methods are Bangladeshi (`Dhaka`, `Chattogram`,
@@ -855,7 +864,11 @@ pages refuse gracefully.
 
 | File | Responsibility |
 | --- | --- |
-| `index.php` | Storefront: hero, category sidebar, product grid, search/filter, deals, features |
+| `index.php` | Homepage: hero, the six departments, a curated product selection, the current deal and the service promises — each block links to the page that owns it |
+| `shop.php` | The catalogue: search (`q`), category and brand facets, sorting, paging — all ordinary GET links, so any result set is one shareable URL |
+| `categories.php` | Category index: every department with its product count and entry price |
+| `deals.php` | Everything currently on offer, biggest saving first, with the list price it is reduced from |
+| `contact.php` | Showroom address, sales line, email, opening hours and the self-service routes (quotation, quick order, B2B) |
 | `product.php` | Product detail page — specifications from `product`/`category`/`vendor`, live stock, serialized units for staff, related products |
 | `dashboard.php` | Role-aware dashboard: staff see database statistics, stock alerts and receivables; customers see their own orders, quotations and invoices |
 | `login.php` | Username/email sign-in; lands on the dashboard |
@@ -863,7 +876,7 @@ pages refuse gracefully.
 | `register.php` | Public registration (`Client Account`, role 4) |
 | `b2b-registration.php` | Company + first branch + optional login (`B2B Client Account`, role 5) |
 | `order.php` | Quick order form for signed-in customers (staff are refused, 403); accepts `?product=<id>&qty=<n>` to pre-fill a line |
-| `quotation-request.php` | Quotation request form for B2B contacts and visitors; individual customer accounts and staff are refused (403); same pre-fill support |
+| `quotation-request.php` | Quotation request form for B2B contacts and visitors; an individual customer account is admitted only when `allow_individual_quotations` is enabled (otherwise 403, as staff always are); same pre-fill support |
 | `cart.php` | The basket and checkout: add/update/remove lines, then place an order (`order` + `order_item`) from the session cart |
 | `order-detail.php` | One order for its owner (or staff): lines, delivery note, status timeline, invoice links, cancel while pending, reorder |
 | `account.php` | My account: name/username/email/phone, password change, the linked company and its branches, recent orders/quotations/invoices |
@@ -900,7 +913,10 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 | `config.php` | Database credentials, site name, currency settings |
 | `db.php` | One shared PDO connection (`db()`) and `db_fetch_all()` |
 | `helpers.php` | Sessions, `current_user()`, `require_login()`, `staff_roles()`/`is_staff_user()`/`require_staff()`, `is_customer_user()`/`customer_client()`/`is_b2b_customer()`, `refuse_staff_order()`, partial rendering, flash messages, JSON helpers, validation, old-input helpers, `next_id()`, `money()`, `amount_in_words()` |
-| `catalog-data.php` | Presentation metadata for products, category icons, catalog queries (`get_featured_products`, `search_products`, `get_product`, `related_products`, `product_units`, `stock_counts`, `stock_label`) |
+| `catalog-data.php` | Presentation metadata for products (photo, badge, "was" price, description), category icons and catalogue queries: the storefront pages (`get_featured_products`, `product_presentation`, `catalog_products`, `catalog_total`, `catalog_brands`, `category_overview`, `deal_products`, `shop_url`) and the product detail ones (`search_products`, `get_product`, `related_products`, `product_units`, `stock_counts`, `stock_label`) |
+| `pdf-document.php` | Renders a document as a PDF through the vendored FPDF: A4 letterhead, party block, wrapping item table with repeating headers and page numbers, totals band, balances, payments, notes and signature lines |
+| `download.php` | `?doc=invoice|quotation|purchase-order|order&no=<n>&format=pdf|csv` — the access-checked download endpoint behind every "Download" button |
+| `vendor/fpdf/` | Vendored FPDF 1.9 (single file + core font metrics) — do not edit |
 | `cart-data.php` | The session basket: add/update/remove, line assembly with live stock state, totals, and `cart_return_path()` — the guard that keeps a posted "return to" path inside this site |
 | `admin-bootstrap.php` | Back-office catalogue + permissions (`back_office_modules()`, `require_module()`), shared page builders, and the module switcher |
 | `partials/document.php` | The one printable-document template: letterhead, parties, item table, totals, amount in words, sign-off |
@@ -909,10 +925,10 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 | `partials/header.php` | Shared head, top strip, navigation, live search |
 | `partials/footer.php` | Footer, the confirmation strip used by add-to-basket, Bootstrap JS, AJAX script, flash auto-dismiss |
 | `.htaccess` | Apache rules: the friendly 404 (`ErrorDocument 404 404.php` plus a rewrite fallback, because Apache resolves a relative `ErrorDocument` against the *server* document root and so misses `404.php` on a subdirectory install), no source/SQL files served, no directory listings, cache and compression headers |
-| `partials/product-panel.php` | Product grid: heading, count, empty state, cards |
 | `partials/product-card.php` | One product card (used by the grid and by related products) |
 | `style.css` | The single stylesheet, including dashboard and product-detail components |
-| `assets/ajax.js` | AJAX forms, live search, filtering, stock notes, account checks |
+| `assets/ajax.js` | AJAX form submits, live search suggestions, per-line stock notes, account checks |
+| `images/products/*.svg` | Flat illustrations for the categories with no photograph (printers, storage, power, CCTV, desk peripherals) |
 | `assets/form-items.js` | Dynamic product rows and live line/grand totals |
 | `api/` | Read-only JSON endpoints (`products.php`, `stock.php`, `check-account.php`) |
 
@@ -1017,8 +1033,13 @@ is attached to a line. `@media print` strips the navigation, the toolbar and the
 
 ## AJAX and progressive enhancement
 
-JavaScript is an enhancement, never a requirement: every form still posts normally and every
-filter is an ordinary GET link.
+JavaScript is an enhancement, never a requirement: every form still posts normally, every
+filter and sort on `shop.php` is an ordinary GET link, and the header search is a plain form
+submission to `shop.php?q=`.
+
+The storefront is deliberately multi-page: navigation goes to a real page with its own URL
+(`shop.php`, `categories.php`, `deals.php`, `contact.php`) instead of scrolling the homepage to
+an anchor, so every destination can be bookmarked, shared and opened directly.
 
 A request carrying `X-Requested-With: fetch` (sent by `assets/ajax.js`) is answered with JSON:
 
@@ -1039,7 +1060,6 @@ marks the most likely fields invalid and focuses the first one. On success it na
 | `api/products.php` | GET `q`, `category`, `limit` | Header search suggestions; each result carries its `product.php?id=` URL, formatted price and stock wording |
 | `api/stock.php` | GET `product_id`, `quantity` | Live availability for one order/quotation line |
 | `api/check-account.php` | GET `username`, `email` | Availability hints during registration |
-| `index.php?ajax=panel` | GET `q`, `category`, `all` | Returns only the product-panel HTML fragment for in-place filtering |
 
 Every form that writes carries a CSRF token (`csrf_field()`), checked by `csrf_guard()` before
 the handler touches the database; a stale token answers `419` to `fetch()` and bounces a normal
@@ -1052,7 +1072,6 @@ Client-side hooks used by the JavaScript (keep them in sync with `assets/ajax.js
 | `data-ajax` | every form with a server-side write (`login`, `register`, `b2b-registration`, `order`, `quotation-request`, `cart`, all `admin-*` modules) | Submit without a page reload; errors render inline |
 | `[data-ajax-errors]` | the same forms | Container for the inline error list |
 | `data-live-search` | header search form | Suggestions dropdown with keyboard navigation |
-| `data-product-panel` / `data-filter-link` | `index.php` grid, sidebar, product cards | Filter the grid and update browser history |
 | `data-stock-note` | `order.php`, `quotation-request.php` | Per-line availability message |
 | `data-check-account` + `data-field-hint` | `register.php`, `b2b-registration.php`, `account.php` | Username/email hints |
 | `data-cart-add` response | product cards, `product.php` | An add-to-basket reply carries `cart.count`/`cart.message`; the script updates the nav badge and shows the confirmation strip instead of navigating |

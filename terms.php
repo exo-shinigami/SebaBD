@@ -97,7 +97,7 @@ $site = $cfg['site']['name'] ?? 'SebaBD';
 
         <p class="text-muted small mt-4 mb-0">
           Questions about these terms? Contact the <?= htmlspecialchars($site) ?> sales team — see the
-          <a href="index.php#footer">contact details in the footer</a>.
+          <a href="contact.php">contact details in the footer</a>.
         </p>
       </div>
     </div>

@@ -61,14 +61,13 @@ echo partial_render('partials/header.php', ['page_title' => 'Page not found', 'a
 
           <div class="d-flex flex-wrap gap-2 justify-content-center">
             <a class="btn btn-accent" href="index.php"><i class="fa-solid fa-house me-1"></i>Home</a>
-            <a class="btn btn-outline-dark" href="index.php?all=1#featured-products">Full catalog</a>
+            <a class="btn btn-outline-dark" href="shop.php">Full catalog</a>
             <?php if ($user): ?>
             <a class="btn btn-outline-dark" href="dashboard.php">My dashboard</a>
             <a class="btn btn-outline-dark" href="account.php">My account</a>
             <?php else: ?>
             <a class="btn btn-outline-dark" href="login.php">Sign in</a>
-            <?php endif; ?>
-            <?php if (can_request_quotation()): ?>
+            <?php endif; ?>             <?php if (can_request_quotation()): ?>
             <a class="btn btn-outline-secondary" href="quotation-request.php">Request a quotation</a>
             <?php endif; ?>
           </div>
@@ -83,7 +82,7 @@ echo partial_render('partials/header.php', ['page_title' => 'Page not found', 'a
           <div class="list-group list-group-flush" data-category-list>
             <?php foreach ($categories as $category): ?>
             <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
-               href="index.php?category=<?= (int) $category['CategoryID'] ?>#featured-products">
+               href="shop.php?category=<?= (int) $category['CategoryID'] ?>">
               <span>
                 <i class="<?= htmlspecialchars(category_icon($category['CategoryName'])) ?> me-2 cat-icon"></i><?= htmlspecialchars($category['CategoryName']) ?>
               </span>

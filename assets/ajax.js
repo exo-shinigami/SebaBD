@@ -13,7 +13,6 @@
  * Modules
  *   forms()   form[data-ajax]            submit without a page reload
  *   search()  form[data-live-search]     suggestions under the header search box
- *   panel()   [data-product-panel]       swap the storefront grid in place
  *   stock()   [data-stock-note]          per-line availability check
  *   account() form[data-check-account]   username / email availability hints
  */
@@ -223,77 +222,6 @@
         });
     }
 
-    /* ------------------------------------------------- storefront panel */
-
-    /** Read ?q / ?category / ?all out of a query string into a params object. */
-    function paramsFromSearch(search) {
-        var source = new URLSearchParams(search || '');
-        var params = {};
-        if (source.get('q')) params.q = source.get('q');
-        if (source.get('category')) params.category = source.get('category');
-        if (source.has('all')) params.all = '1';
-        return params;
-    }
-
-    function panel() {
-        var panel = document.querySelector('[data-product-panel]');
-        if (!panel) return;
-
-        function syncSidebar(params) {
-            var wanted = '?' + queryString(params);
-            document.querySelectorAll('[data-category-list] [data-filter-link]').forEach(function (link) {
-                var url = new URL(link.getAttribute('href'), window.location.href);
-                link.classList.toggle('active', url.search === wanted || (wanted === '?' && url.search === ''));
-            });
-        }
-
-        function apply(params, options) {
-            options = options || {};
-            panel.classList.add('is-loading');
-
-            fetch('index.php?ajax=panel&' + queryString(params), { headers: JSON_HEADERS, credentials: 'same-origin' })
-                .then(function (response) {
-                    if (!response.ok) throw new Error('HTTP ' + response.status);
-                    return response.text();
-                })
-                .then(function (html) {
-                    panel.innerHTML = html;
-                    panel.classList.remove('is-loading');
-                    syncSidebar(params);
-                    if (options.push !== false) {
-                        window.history.pushState({ panel: params }, '', 'index.php?' + queryString(params) + '#featured-products');
-                    }
-                    if (options.scroll) {
-                        var anchor = document.getElementById('featured-products');
-                        if (anchor && anchor.scrollIntoView) anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
-                })
-                .catch(function () {
-                    panel.classList.remove('is-loading');
-                    // Fall back to a normal navigation rather than an empty grid.
-                    window.location.assign('index.php?' + queryString(params));
-                });
-        }
-
-        // Category links and the "Clear filter" link.
-        document.querySelectorAll('[data-filter-link]').forEach(function (link) {
-            link.addEventListener('click', function (event) {
-                var url = new URL(link.getAttribute('href'), window.location.href);
-                if (url.pathname.split('/').pop() !== 'index.php') return;
-                event.preventDefault();
-                apply(paramsFromSearch(url.search), { scroll: true });
-            });
-        });
-
-        // Back / forward buttons restore the grid for the previous filter.
-        window.addEventListener('popstate', function (event) {
-            var params = (event.state && event.state.panel) || paramsFromSearch(window.location.search);
-            apply(params, { push: false });
-        });
-
-        panel.applyFilter = apply;
-    }
-
     /* -------------------------------------------------------- live search */
 
     function search() {
@@ -325,14 +253,9 @@
         function choose(index) {
             var item = items[index];
             if (!item) return;
-            var target = { q: item.dataset.name };
-            var panel = document.querySelector('[data-product-panel]');
             close();
-            if (panel && panel.applyFilter) {
-                panel.applyFilter(target, { scroll: true });
-            } else {
-                window.location.assign('index.php?' + queryString(target) + '#featured-products');
-            }
+            // The suggestions are search terms, and search lives on shop.php.
+            window.location.assign('shop.php?q=' + encodeURIComponent(item.dataset.name));
         }
 
         function render(data) {
@@ -396,14 +319,8 @@
             if (!form.contains(event.target)) close();
         });
 
-        form.addEventListener('submit', function (event) {
-            var panel = document.querySelector('[data-product-panel]');
-            if (!panel || !panel.applyFilter) return; // other pages: normal GET
-            event.preventDefault();
-            close();
-            var term = input.value.trim();
-            panel.applyFilter(term ? { q: term } : {}, { scroll: true });
-        });
+        // Submitting is an ordinary GET to shop.php — the form's own action —
+        // so a search is a real, shareable URL.
     }
 
     /* ------------------------------------------------- per-line stock check */
@@ -514,7 +431,6 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         forms();
-        panel();
         search();
         stock();
         account();

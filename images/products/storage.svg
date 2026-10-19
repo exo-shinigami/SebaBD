@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="Storage drive illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f3b46"/>
+      <stop offset="1" stop-color="#1b242c"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="155" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- drive label -->
+  <rect x="152" y="152" width="296" height="146" rx="12" fill="url(#chip)"/>
+  <rect x="152" y="152" width="296" height="34" rx="12" fill="#3a4854"/>
+  <rect x="180" y="206" width="150" height="10" rx="5" fill="#0ea5b5" opacity="0.5"/>
+  <rect x="180" y="228" width="112" height="8" rx="4" fill="#5d6b77"/>
+  <rect x="180" y="248" width="132" height="8" rx="4" fill="#5d6b77"/>
+
+  <!-- status LEDs -->
+  <circle cx="404" cy="226" r="7" fill="#37d3c3"/>
+  <circle cx="404" cy="252" r="7" fill="#5d6b77"/>
+
+  <!-- connector teeth -->
+  <g fill="#c8d4dc">
+    <rect x="176" y="298" width="34" height="16" rx="3"/>
+    <rect x="224" y="298" width="14" height="16" rx="3"/>
+    <rect x="252" y="298" width="14" height="16" rx="3"/>
+    <rect x="280" y="298" width="34" height="16" rx="3"/>
+  </g>
+  <rect x="152" y="292" width="296" height="28" rx="8" fill="#3a4854"/>
+
+  <!-- a second, smaller drive behind -->
+  <rect x="392" y="196" width="88" height="58" rx="8" fill="#ffffff" stroke="#c8d4dc" stroke-width="3"/>
+  <rect x="408" y="214" width="56" height="7" rx="3" fill="#cfdae1"/>
+  <rect x="408" y="230" width="40" height="7" rx="3" fill="#cfdae1"/>
+
+  <ellipse cx="300" cy="352" rx="150" ry="14" fill="#1b242c" opacity="0.08"/>
+</svg>

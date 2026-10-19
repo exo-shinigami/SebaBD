@@ -1,61 +1,32 @@
 <?php
+/**
+ * SebaBD — homepage.
+ *
+ * A landing page, not the whole store: the hero, the six categories, a curated
+ * selection of products, the current offer and the service promises. Everything
+ * that needs its own address lives on its own page — shop.php for the catalogue,
+ * categories.php for the departments, deals.php for the offers, contact.php for
+ * the sales desk — so each destination is one click and one URL.
+ */
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/catalog-data.php';
 require_once __DIR__ . '/helpers.php';
 // The product cards post their Add-to-cart form with a return URL, so the
-// storefront needs cartridge helpers even on the AJAX path, where
-// partials/header.php (and its own cart-data.php include) never runs.
+// storefront needs the cartridge helpers even before header.php loads them.
 require_once __DIR__ . '/cart-data.php';
 
-/* ------------------------------------------------------ storefront view
- *
- * One code path serves both the first paint and the AJAX refresh:
- *
- *   index.php                            full page, and search / category also
- *                                        work with JavaScript disabled because
- *                                        they are ordinary GET links
- *   index.php?ajax=panel&q=…             just the product panel, which
- *                                        assets/ajax.js swaps in place
- *
- * Filters: ?q=<text>  ?category=<CategoryID>  ?all=1
- */
-$query      = trim((string) ($_GET['q'] ?? ''));
-$categoryId = max(0, (int) ($_GET['category'] ?? 0));
-$showAll    = isset($_GET['all']);
-$filtered   = $query !== '' || $categoryId > 0 || $showAll;
+$featured   = get_featured_products(12);
+$available  = stock_counts($featured);
+$categories = category_overview();
+$deals      = deal_products(24);
+$total      = get_product_count();
 
-if ($filtered) {
-    $products   = search_products($query, $categoryId, 24);
-    // The deals strip keeps advertising the featured range, not the search hit.
-    $dealSource = get_featured_products();
-} else {
-    $products   = get_featured_products();
-    $dealSource = $products;
-}
-
-$categories   = get_categories();
-$categoryName = $categoryId > 0 ? category_name($categoryId) : '';
-
-$panelVars = [
-    'products'     => $products,
-    'query'        => $query,
-    'categoryName' => $categoryName,
-    'showAll'      => $showAll,
-];
-
-// Deal stats are derived from what the DB actually returned, not hard-coded.
-$onSale      = array_filter($dealSource, fn($p) => !empty($p['sale']) && (float) $p['sale'] > (float) $p['StandardPrice']);
 $maxDiscount = 0.0;
-foreach ($onSale as $p) {
-    $was = (float) $p['sale'];
-    $maxDiscount = max($maxDiscount, ($was - (float) $p['StandardPrice']) / $was * 100);
+foreach ($deals as $deal) {
+    $maxDiscount = max($maxDiscount, discount_percent($deal));
 }
-
-// AJAX refresh: hand back only the panel, without the page chrome.
-if (($_GET['ajax'] ?? '') === 'panel') {
-    echo partial_render('partials/product-panel.php', $panelVars);
-    exit;
-}
+$dealsPreview = array_slice($deals, 0, 3);
+$dealCounts   = stock_counts($dealsPreview);
 ?>
 <?= partial_render('partials/header.php', ['page_title' => '', 'active_nav' => 'home']) ?>
           <section class="hero-section py-5">
@@ -66,8 +37,8 @@ if (($_GET['ajax'] ?? '') === 'panel') {
                   <h1 class="display-5 fw-bold mt-3 mb-3">Complete IT solutions for homes and offices.</h1>
                   <p class="lead text-white-50 mb-4">From business laptops and 4K monitors to managed network switches and everyday accessories — SebaBD supplies, installs and services the technology your business runs on.</p>
                   <div class="d-flex flex-wrap gap-3">
-                    <a class="btn btn-accent btn-lg" href="#featured-products">Shop Products</a>
-                    <a class="btn btn-outline-light btn-lg" href="#categories">Browse Categories</a>
+                    <a class="btn btn-accent btn-lg" href="shop.php">Shop products</a>
+                    <a class="btn btn-outline-light btn-lg" href="categories.php">Browse categories</a>
                   </div>
                   <div class="d-flex flex-wrap gap-4 mt-4 hero-trust small text-white-50">
                     <span><i class="fa-solid fa-shield-halved me-2"></i>Genuine products with warranty</span>
@@ -86,7 +57,7 @@ if (($_GET['ajax'] ?? '') === 'panel') {
                         <small class="text-white-50">Categories</small>
                       </div>
                       <div>
-                        <div class="fw-semibold"><?= get_product_count() ?></div>
+                        <div class="fw-semibold"><?= $total ?></div>
                         <small class="text-white-50">Products</small>
                       </div>
                       <div>
@@ -104,45 +75,62 @@ if (($_GET['ajax'] ?? '') === 'panel') {
             </div>
           </section>
 
-          <section class="py-5">
+          <section class="py-4">
             <div class="container">
-              <div class="row g-4">
-                <aside class="col-lg-3" id="categories">
-                  <div class="sidebar-card h-100">
-                    <h3 class="h5 mb-3">Shop by category</h3>
-                    <div class="list-group list-group-flush" data-category-list>
-                      <?php foreach ($categories as $category): ?>
-                      <a class="list-group-item list-group-item-action <?= (int) $category['CategoryID'] === $categoryId ? 'active' : '' ?>"
-                         href="index.php?category=<?= (int) $category['CategoryID'] ?>#featured-products" data-filter-link>
-                        <i class="<?= htmlspecialchars(category_icon($category['CategoryName'])) ?> me-2 cat-icon"></i><?= htmlspecialchars($category['CategoryName']) ?>
-                      </a>
-                      <?php endforeach; ?>
-                      <a class="list-group-item list-group-item-action <?= $showAll ? 'active' : '' ?>"
-                         href="index.php?all=1#featured-products" data-filter-link>
-                        <i class="fa-solid fa-layer-group me-2 cat-icon"></i>All products
-                      </a>
-                    </div>
-                    <p class="text-muted small mb-0 mt-3">
-                      <i class="fa-solid fa-wand-magic-sparkles me-1"></i>Search or pick a category — the grid refreshes without a page reload.
-                    </p>
-                  </div>
-                </aside>
-
-                <div class="col-lg-9" id="featured-products" data-product-panel>
-                  <?= partial_render('partials/product-panel.php', $panelVars) ?>
+              <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+                <div>
+                  <p class="section-label mb-1">Departments</p>
+                  <h2 class="h4 mb-0">Shop by category</h2>
                 </div>
+                <a class="text-decoration-none small" href="categories.php">All categories <i class="fa-solid fa-arrow-right ms-1"></i></a>
+              </div>
+              <div class="row g-3">
+                <?php foreach ($categories as $category): ?>
+                <div class="col-6 col-md-4 col-xl-2">
+                  <a class="feature-card h-100 d-block text-decoration-none p-3"
+                     href="shop.php?category=<?= (int) $category['CategoryID'] ?>">
+                    <span class="feature-icon"><i class="<?= htmlspecialchars(category_icon((string) $category['CategoryName'])) ?>"></i></span>
+                    <p class="fw-semibold small mb-0 mt-3"><?= htmlspecialchars((string) $category['CategoryName']) ?></p>
+                    <p class="text-muted small mb-0"><?= (int) $category['Products'] ?> item<?= (int) $category['Products'] === 1 ? '' : 's' ?></p>
+                  </a>
+                </div>
+                <?php endforeach; ?>
               </div>
             </div>
           </section>
 
-          <section class="deals-section py-5" id="deals">
+          <section class="py-5">
             <div class="container">
-              <div class="row g-4 align-items-center">
+              <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-4">
+                <div>
+                  <p class="section-label mb-1">Featured products</p>
+                  <h2 class="h3 mb-0">Popular right now</h2>
+                  <p class="text-muted small mb-0">A cross-section of the range — the full catalogue is one click away.</p>
+                </div>
+                <a class="btn btn-outline-dark" href="shop.php">
+                  View all <?= $total ?> products <i class="fa-solid fa-arrow-right ms-1"></i>
+                </a>
+              </div>
+              <div class="row g-4">
+                <?php foreach ($featured as $product): ?>
+                <?= partial_render('partials/product-card.php', [
+                    'product'   => $product,
+                    'available' => $available[(int) $product['ProductID']] ?? 0,
+                ]) ?>
+                <?php endforeach; ?>
+              </div>
+            </div>
+          </section>
+
+          <?php if ($dealsPreview): ?>
+          <section class="deals-section py-5">
+            <div class="container">
+              <div class="row g-4 align-items-center mb-4">
                 <div class="col-lg-7">
                   <p class="section-label mb-1">This week only</p>
                   <h2 class="h3 mb-3 text-white">Deals of the week — save on business essentials</h2>
                   <p class="text-white-50 mb-4">Business laptops, 4K monitors, managed switches and accessories from HP, Dell, Cisco and Logitech at reduced prices until Sunday night.</p>
-                  <a href="#featured-products" class="btn btn-accent btn-lg">Grab the deals</a>
+                  <a href="deals.php" class="btn btn-accent btn-lg">See all <?= count($deals) ?> deals</a>
                 </div>
                 <div class="col-lg-5">
                   <div class="deals-card d-flex align-items-center justify-content-around gap-3">
@@ -152,7 +140,7 @@ if (($_GET['ajax'] ?? '') === 'panel') {
                     </div>
                     <div class="vr"></div>
                     <div class="text-center">
-                      <div class="display-6 fw-bold"><?= count($onSale) ?></div>
+                      <div class="display-6 fw-bold"><?= count($deals) ?></div>
                       <small class="text-white-50 d-block">Items on sale</small>
                     </div>
                     <div class="vr"></div>
@@ -163,10 +151,20 @@ if (($_GET['ajax'] ?? '') === 'panel') {
                   </div>
                 </div>
               </div>
+
+              <div class="row g-4">
+                <?php foreach ($dealsPreview as $product): ?>
+                <?= partial_render('partials/product-card.php', [
+                    'product'   => $product,
+                    'available' => $dealCounts[(int) $product['ProductID']] ?? 0,
+                ]) ?>
+                <?php endforeach; ?>
+              </div>
             </div>
           </section>
+          <?php endif; ?>
 
-          <section class="py-5" id="why-us">
+          <section class="py-5">
             <div class="container">
               <div class="row g-4">
                 <div class="col-md-4">

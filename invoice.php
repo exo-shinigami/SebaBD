@@ -226,6 +226,8 @@ echo partial_render('partials/document.php', [
         . '<div class="col-sm-4"><div class="document-block-title mb-1">Amount paid</div><div class="fw-bold">' . money($paid) . '</div></div>'
         . '<div class="col-sm-4"><div class="document-block-title mb-1">Balance due</div><div class="fw-bold">' . money($balance) . '</div></div>'
         . '</div>',
+    'download_href'    => 'download.php?doc=invoice&no=' . (int) $invoice['InvoiceNo'],
+    'download_csv_href' => 'download.php?doc=invoice&no=' . (int) $invoice['InvoiceNo'] . '&format=csv',
     'back_href'        => is_staff_user($user) ? 'admin-invoices.php' : 'dashboard.php',
     'back_label'       => is_staff_user($user) ? 'All invoices' : 'My dashboard',
 ]);

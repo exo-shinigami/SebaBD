@@ -123,6 +123,8 @@ echo partial_render('partials/document.php', [
     'sign_right'       => 'Supplier acknowledgement',
     'actions_html'     => '<a class="btn btn-accent btn-sm" href="admin-purchase-orders.php?action=view&id=' . (int) $order['PONo'] . '">'
         . '<i class="fa-solid fa-truck-ramp-box me-1"></i>Receive stock</a>',
+    'download_href'    => 'download.php?doc=purchase-order&no=' . (int) $order['PONo'],
+    'download_csv_href' => 'download.php?doc=purchase-order&no=' . (int) $order['PONo'] . '&format=csv',
     'hint'             => 'Supplier cost prices — internal document',
     'back_href'        => 'admin-purchase-orders.php',
     'back_label'       => 'All purchase orders',

@@ -279,7 +279,7 @@ $page_title = 'Your basket';
           Prices and stock are re-checked every time this page loads.
         </p>
       </div>
-      <a class="text-decoration-none" href="index.php?all=1#featured-products">
+      <a class="text-decoration-none" href="shop.php">
         <i class="fa-solid fa-cart-plus me-1"></i>Keep shopping
       </a>
     </div>
@@ -298,7 +298,7 @@ $page_title = 'Your basket';
       <h2 class="h5 mb-2">Your basket is empty</h2>
       <p class="text-muted mb-4">Browse the catalog and add what you need — nothing is ordered until you check out.</p>
       <div class="d-flex flex-wrap gap-2 justify-content-center">
-        <a class="btn btn-accent" href="index.php?all=1#featured-products">Browse products</a>
+        <a class="btn btn-accent" href="shop.php">Browse products</a>
         <?php if (can_request_quotation()): ?>
         <a class="btn btn-outline-dark" href="quotation-request.php">Request a quotation instead</a>
         <?php endif; ?>

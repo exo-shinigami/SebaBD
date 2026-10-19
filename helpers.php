@@ -124,13 +124,35 @@ function is_b2b_customer(?array $user = null): bool
 }
 
 /**
+ * Is the optional individual-quotations feature enabled in config.php?
+ *
+ * This is a cheap, cached read of `config.php` that exists so the quotation
+ * gate and the refusal page can both answer the question without loading the
+ * whole config tree in more than one place.
+ */
+function is_individual_quotations_enabled(): bool
+{
+    static $enabled = null;
+    if ($enabled === null) {
+        $enabled = !empty((require __DIR__ . '/config.php')['allow_individual_quotations']);
+    }
+
+    return $enabled;
+}
+
+/**
  * May this visitor ask for a quotation from the storefront?
  *
  * Quotation requests are a company (B2B) flow, plus the walk-in path for a
  * visitor who has not registered yet — their request is filed under the
- * Walk-in account. Individual customer accounts order directly: they have no
- * branch and no company paperwork, so the storefront never offers them a
- * quotation (and quotation-request.php refuses them).
+ * Walk-in account. Individual customer accounts normally order directly and are
+ * not offered quotations.
+ *
+ * The one exception is the optional config flag `allow_individual_quotations`.
+ * When it is enabled, an individual customer can request a quotation again; the
+ * request is still filed under their own client record (ClientID, BranchID NULL)
+ * rather than under a SebaBD house branch, so nothing company- or branch-related is
+ * created or shown on their account.
  */
 function can_request_quotation(?array $user = null): bool
 {
@@ -139,7 +161,16 @@ function can_request_quotation(?array $user = null): bool
         return true;
     }
 
-    return !is_staff_user($user) && is_b2b_customer($user);
+    if (!is_staff_user($user) && is_b2b_customer($user)) {
+        return true;
+    }
+
+    static $flag = null;
+    if ($flag === null) {
+        $flag = !empty((require __DIR__ . '/config.php')['allow_individual_quotations']);
+    }
+
+    return $flag && !is_staff_user($user) && !is_b2b_customer($user) && customer_client($user) !== null;
 }
 
 /* ---------------------------------------------------------- staff roles */
@@ -973,9 +1004,9 @@ function system_branch_ids(): array
 /**
  * Refuse a storefront quotation request from somebody who may not file one.
  *
- * Individual customer accounts order directly (see can_request_quotation()),
- * and staff never request quotations. Obeys the same 403 + friendly page
- * convention as refuse_staff_order(), so a typed URL cannot bypass the hidden
+ * Staff never request quotations. Otherwise, either the visitor is allowed by
+ * can_request_quotation() (B2B, walk-in, or an individual customer when the config
+ * flag is on), or they are refused here so a typed URL cannot bypass the hidden
  * buttons.
  */
 function refuse_quotation_request(?array $user = null): void
@@ -994,13 +1025,32 @@ function refuse_quotation_request(?array $user = null): void
         );
     }
 
+    if (current_user() !== null) {
+        $client = customer_client($user);
+        $isIndividual = $client !== null && ($client['AccountType'] ?? '') === 'individual';
+
+        deny_page(
+            403,
+            'Quotation requests are not enabled for personal accounts',
+            $isIndividual
+                ? 'You are signed in with a personal customer account. '
+                  . (is_individual_quotations_enabled() ? 'You can request a quotation from your account dashboard.'
+                    : 'Quotations are normally a business (B2B) flow, but this storefront can be configured to let personal accounts request them too — ask the sales desk to turn that on.')
+                  . ' In the meantime the storefront is the direct way to buy.'
+                : 'You are signed in as an individual customer, so the storefront is the direct way '
+                  . 'to buy. Quotations are prepared for registered companies — register your company '
+                  . 'if you are buying on its behalf.',
+            'shop.php',
+            'Browse the catalog'
+        );
+    }
+
+    // A signed-out visitor always reaches the form.
     deny_page(
         403,
-        'Quotation requests are for business accounts',
-        'You are signed in as an individual customer, so the storefront is the direct way '
-        . 'to buy. Quotations are prepared for registered companies — register your company '
-        . 'if you are buying on its behalf.',
-        'index.php?all=1#featured-products',
+        'Quotation requests are for customers',
+        'Please sign in or create an account to request a quotation.',
+        'shop.php',
         'Browse the catalog'
     );
 }

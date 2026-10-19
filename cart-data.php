@@ -128,13 +128,7 @@ function cart_lines(): array
 
         // Same presentation metadata the storefront cards use (photo, badge,
         // blurb), so a product looks identical in the basket and the grid.
-        $row = array_merge($row, product_meta()[$productId] ?? [
-            'image' => null,
-            'alt'   => $row['ProductName'],
-            'badge' => null,
-            'blurb' => '',
-            'sale'  => null,
-        ]);
+        $row = product_presentation($row);
 
         $row['Quantity']  = $qty;
         $row['LineTotal'] = $qty * (float) $row['StandardPrice'];

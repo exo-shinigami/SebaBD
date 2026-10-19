@@ -12,10 +12,10 @@
               <div class="col-6 col-md-3">
                 <h4 class="h6 text-uppercase small fw-bold mb-3">Shop</h4>
                 <ul class="list-unstyled small mb-0">
-                  <li><a href="index.php#featured-products">Featured products</a></li>
-                  <li><a href="index.php?all=1#featured-products">Full catalog</a></li>
-                  <li><a href="index.php#categories">Categories</a></li>
-                  <li><a href="index.php#deals">Deals</a></li>
+                  <li><a href="shop.php">Shop all products</a></li>
+                  <li><a href="categories.php">Categories</a></li>
+                  <li><a href="deals.php">Deals</a></li>
+                  <li><a href="shop.php?sort=price_asc">Cheapest first</a></li>
                 </ul>
               </div>
               <div class="col-6 col-md-3">
@@ -28,6 +28,7 @@
                   <li><a href="quotation-request.php">Request quotation</a></li>
                   <?php endif; ?>
                   <li><a href="b2b-registration.php">B2B registration</a></li>
+                  <li><a href="contact.php">Contact the sales desk</a></li>
                   <?php if (!current_user()): ?>
                   <li><a href="register.php">Create account</a></li>
                   <?php endif; ?>
@@ -38,7 +39,18 @@
                 </ul>
               </div>
             </div>
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 border-top border-white border-opacity-10 pt-3">
+            <div class="d-flex flex-wrap justify-content-md-between align-items-start gap-3 border-top border-white border-opacity-10 pt-3">
+              <div class="small">
+                <?php $company = company_details(); ?>
+                <p class="mb-1"><i class="fa-solid fa-location-dot me-2"></i><?= htmlspecialchars($company['address']) ?></p>
+                <p class="mb-0">
+                  <i class="fa-solid fa-phone me-2"></i><a class="text-decoration-none" href="tel:<?= htmlspecialchars(preg_replace('/[^0-9+]/', '', $company['phone'])) ?>"><?= htmlspecialchars($company['phone']) ?></a>
+                  <span class="mx-2 opacity-50">·</span>
+                  <i class="fa-solid fa-envelope me-2"></i><a class="text-decoration-none" href="mailto:<?= htmlspecialchars($company['email']) ?>"><?= htmlspecialchars($company['email']) ?></a>
+                </p>
+              </div>
+            </div>
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 border-top border-white border-opacity-10 mt-3 pt-3">
               <p class="mb-0">All rights reserved © SebaBD 2026</p>
               <div class="d-flex gap-3 small">
                 <a class="text-decoration-none" href="privacy.php">Privacy</a>

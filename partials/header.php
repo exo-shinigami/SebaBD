@@ -74,10 +74,12 @@ $user = current_user();
             <div class="collapse navbar-collapse" id="mainNavbar">
               <ul class="navbar-nav ms-auto me-lg-3 mb-2 mb-lg-0">
                 <li class="nav-item"><a class="nav-link <?= $active_nav === 'home' ? 'active' : '' ?>" <?= $active_nav === 'home' ? 'aria-current="page"' : '' ?> href="index.php">Home</a></li>
-                <li class="nav-item"><a class="nav-link <?= $active_nav === 'shop' ? 'active' : '' ?>" href="index.php#featured-products">Shop</a></li>
-                <li class="nav-item"><a class="nav-link <?= $active_nav === 'categories' ? 'active' : '' ?>" href="index.php#categories">Categories</a></li>
-                <li class="nav-item"><a class="nav-link <?= $active_nav === 'deals' ? 'active' : '' ?>" href="index.php#deals">Deals</a></li>
-                <li class="nav-item"><a class="nav-link <?= $active_nav === 'contact' ? 'active' : '' ?>" href="index.php#footer">Contact</a></li>
+                <!-- Each nav item is its own page with its own URL, so it can be
+                     bookmarked, shared and opened directly. -->
+                <li class="nav-item"><a class="nav-link <?= $active_nav === 'shop' ? 'active' : '' ?>" <?= $active_nav === 'shop' ? 'aria-current="page"' : '' ?> href="shop.php">Shop</a></li>
+                <li class="nav-item"><a class="nav-link <?= $active_nav === 'categories' ? 'active' : '' ?>" <?= $active_nav === 'categories' ? 'aria-current="page"' : '' ?> href="categories.php">Categories</a></li>
+                <li class="nav-item"><a class="nav-link <?= $active_nav === 'deals' ? 'active' : '' ?>" <?= $active_nav === 'deals' ? 'aria-current="page"' : '' ?> href="deals.php">Deals</a></li>
+                <li class="nav-item"><a class="nav-link <?= $active_nav === 'contact' ? 'active' : '' ?>" <?= $active_nav === 'contact' ? 'aria-current="page"' : '' ?> href="contact.php">Contact</a></li>
                 <?php if ($user): ?>
                 <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'dashboard' ? 'active' : '' ?>" <?= $active_nav === 'dashboard' ? 'aria-current="page"' : '' ?> href="dashboard.php">Dashboard</a></li>
                 <li class="nav-item"><a class="nav-link text-nowrap <?= $active_nav === 'account' ? 'active' : '' ?>" href="account.php">My account</a></li>
@@ -98,7 +100,7 @@ $user = current_user();
               </ul>
               <!-- Live suggestions are filled by assets/ajax.js from api/products.php;
                    without JavaScript this stays an ordinary GET search. -->
-              <form class="d-flex search-form" role="search" action="index.php" method="get" data-live-search>
+              <form class="d-flex search-form" role="search" action="shop.php" method="get" data-live-search>
                 <input class="form-control me-2" type="search" name="q" placeholder="Search laptops, monitors…"
                        aria-label="Search products" aria-expanded="false" aria-controls="search-suggestions"
                        autocomplete="off" value="<?= isset($_GET['q']) ? htmlspecialchars($_GET['q']) : '' ?>">

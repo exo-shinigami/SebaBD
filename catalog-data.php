@@ -20,13 +20,19 @@ if (!function_exists('db_fetch_all')) {
 }
 
 /**
- * Image path, deal badge and short blurb for each product, keyed by ProductID.
+ * Per-product presentation extras, keyed by ProductID: a photo, a corner
+ * badge, hand-written copy and a "was" price for the deals pages.
+ *
+ * The database stays the single source of truth for what exists, what it costs
+ * and how many are on hand; this map only decorates what it returns. A product
+ * with no entry here still renders: product_presentation() gives it its
+ * category photo and a description built from the row itself.
  *
  * Images are local files under images/products/ so the storefront never
  * depends on an external host:
- *   - 1, 2, 4  → manufacturer product photos from the sebabd.com catalog
- *   - 3        → Wikimedia Commons, "19-inch rackmount Ethernet switches and
- *                patch panels" (CC BY-SA), used for the Cisco switch
+ *   - laptop/monitor/mouse/switch → product photos from the sebabd.com catalog
+ *   - the .svg tiles            → flat category illustrations drawn for this
+ *                                 site, used when no photo fits the item
  * Drop a replacement file in images/products/ and update the path here.
  */
 function product_meta(): array
@@ -37,19 +43,19 @@ function product_meta(): array
             'alt'   => 'HP ProBook 450 G10 business laptop',
             'badge' => 'Hot',
             'blurb' => 'HP ProBook 450 G10 business notebook (Core i5, 16 GB) — 24-month warranty tracked per serial number.',
-            'sale'  => 158400.00,
+            'sale'  => 108000.00,
         ],
         2 => [
             'image' => 'images/products/monitor.jpg',
             'alt'   => 'Dell UltraSharp 27-inch 4K monitor',
             'badge' => 'Deal',
-            'blurb' => 'Dell UltraSharp 4K IPS panel (U2723QE) with USB-C docking and factory colour calibration — 12-month warranty.',
-            'sale'  => 74400.00,
+            'blurb' => 'Dell UltraSharp 4K IPS panel (U2723QE) with USB-C docking and factory colour calibration — 36-month warranty.',
+            'sale'  => 138000.00,
         ],
         3 => [
             'image' => 'images/products/switch.jpg',
             'alt'   => 'Cisco 24-port managed network switch',
-            'badge' => 'New',
+            'badge' => 'Hot',
             'blurb' => 'Cisco CBS350-24T 24-port managed gigabit switch — 36-month manufacturer warranty tracked per serial number.',
             'sale'  => null,
         ],
@@ -58,9 +64,197 @@ function product_meta(): array
             'alt'   => 'Logitech MX Master 3S wireless mouse',
             'badge' => 'Deal',
             'blurb' => 'Logitech MX Master 3S wireless mouse — quiet clicks, 8,000 DPI tracking and multi-device switching.',
-            'sale'  => 14400.00,
+            'sale'  => 11000.00,
         ],
+        // The rest of the range is merchandised from the same map: a badge puts
+        // the item in the "new arrivals" spotlight, a sale price puts it on the
+        // deals pages. Anything listed here without a photo falls back to the
+        // photo for its category.
+        5  => ['badge' => 'Deal', 'sale' => 68000.00],
+        6  => ['sale' => 74500.00],
+        7  => ['badge' => 'New'],
+        8  => ['sale' => 76000.00],
+        10 => ['badge' => 'Hot', 'sale' => 110000.00],
+        13 => ['badge' => 'New'],
+        14 => ['badge' => 'Deal', 'sale' => 104000.00],
+        19 => ['sale' => 16000.00],
+        21 => ['badge' => 'New'],
+        22 => ['sale' => 12000.00],
+        27 => ['badge' => 'Deal', 'sale' => 3900.00],
+        31 => ['sale' => 20500.00],
+        42 => ['sale' => 5200.00],
+        45 => ['badge' => 'New'],
+        46 => ['badge' => 'Deal', 'sale' => 25500.00],
+        56 => ['badge' => 'New'],
     ];
+}
+
+/**
+ * The photo a product falls back to when product_meta() names none: its
+ * category, with a couple of name-level exceptions so a battery backup is not
+ * illustrated with a mouse.
+ */
+function category_image(string $categoryName, string $productName = ''): string
+{
+    $byName = [
+        'UPS'      => 'images/products/power.svg',
+        'AVR'      => 'images/products/power.svg',
+        'Camera'   => 'images/products/cctv.svg',
+        'Keyboard' => 'images/products/peripherals.svg',
+        'Headset'  => 'images/products/peripherals.svg',
+        'Webcam'   => 'images/products/peripherals.svg',
+        'Hub'      => 'images/products/peripherals.svg',
+        'Cable'    => 'images/products/peripherals.svg',
+    ];
+    foreach ($byName as $needle => $image) {
+        if ($productName !== '' && mb_stripos($productName, $needle) !== false) {
+            return $image;
+        }
+    }
+
+    $byCategory = [
+        'Laptops & Computers'  => 'images/products/laptop.jpg',
+        'Monitors & Displays'  => 'images/products/monitor.jpg',
+        'Networking Equipment' => 'images/products/switch.jpg',
+        'Accessories'          => 'images/products/mouse.png',
+        'Printers & Scanners'  => 'images/products/printer.svg',
+        'Storage & Components' => 'images/products/storage.svg',
+    ];
+
+    return $byCategory[$categoryName] ?? '';
+}
+
+/**
+ * A one-line description for a product that has no hand-written copy: what it
+ * is for, plus the warranty the shop records against it. Built from the row so
+ * every catalog item — including ones added in the back office — reads as a
+ * real listing instead of a bare name.
+ */
+function product_blurb(array $row): string
+{
+    $lead = trim(implode(' ', array_filter([
+        trim((string) ($row['Brand'] ?? '')),
+        trim((string) ($row['ProductName'] ?? '')),
+    ])));
+    if ($lead === '') {
+        return '';
+    }
+
+    // A device-level phrase where the name says what the thing is, so a UPS is
+    // not described as a desk accessory and an SSD is not a printer part.
+    $byName = [
+        'UPS'            => 'battery backup for desks and small server rooms',
+        'AVR'            => 'voltage regulator that protects equipment from surges',
+        'Camera'         => 'security camera for shop and office coverage',
+        'SSD'            => 'solid-state drive for faster boot and loading times',
+        'HDD'            => 'hard disk for bulk storage and backups',
+        'DDR'            => 'memory module for upgrading a desktop or laptop',
+        'Router'         => 'router for home and small-office networks',
+        'Switch'         => 'network switch for wired office networks',
+        'Range Extender' => 'range extender that clears Wi-Fi dead spots',
+        'Access Point'   => 'ceiling access point for wider office Wi-Fi coverage',
+        'Webcam'         => 'webcam for meetings and online classes',
+        'Headset'        => 'headset for calls and online meetings',
+        'Keyboard'       => 'keyboard for everyday office work',
+        'Mouse'          => 'mouse for everyday office work',
+        'Hub'            => 'USB-C hub that adds the ports a laptop lacks',
+        'Cable'          => 'cable for connecting a display or dock',
+        'Printer'        => 'office printer with consumables available locally',
+        'All-in-One'     => 'print, scan and copy in one desktop unit',
+        'Monitor'        => 'desktop display for office and home work',
+    ];
+
+    $name = (string) ($row['ProductName'] ?? '');
+    $use  = '';
+    foreach ($byName as $needle => $phrase) {
+        if (mb_stripos($name, $needle) !== false) {
+            $use = $phrase;
+            break;
+        }
+    }
+
+    if ($use === '') {
+        $use = match ((string) ($row['CategoryName'] ?? '')) {
+            'Laptops & Computers'  => 'business notebook for office and home use',
+            'Monitors & Displays'  => 'desktop display for office and home work',
+            'Networking Equipment' => 'networking gear for offices and small businesses',
+            'Accessories'          => 'everyday accessory that ships from stock today',
+            'Printers & Scanners'  => 'office printer with consumables available locally',
+            'Storage & Components' => 'upgrade component, fitted by our service desk on request',
+            default                => 'item from the SebaBD catalogue',
+        };
+    }
+
+    $months  = (int) ($row['DefaultWarrantyMonths'] ?? 0);
+    // "an 8-month", "an 11-month", "an 18-month" — the vowel sound the number
+    // starts with decides the article.
+    $article = preg_match('/^(8|11|18)$/', (string) $months) === 1 ? 'an' : 'a';
+    $warranty = $months > 0
+        ? ' Backed by ' . $article . ' ' . $months . '-month warranty tracked against the item you buy.'
+        : '';
+
+    return $lead . ' — ' . $use . '.' . $warranty;
+}
+
+/**
+ * The row a storefront card renders from: the database columns, the
+ * hand-written extras from product_meta(), and the derived photo/description
+ * for anything left over.
+ */
+function product_presentation(array $row): array
+{
+    $id   = (int) ($row['ProductID'] ?? 0);
+    $name = (string) ($row['ProductName'] ?? 'Product');
+
+    return array_merge(
+        [
+            'image' => category_image((string) ($row['CategoryName'] ?? ''), $name),
+            'alt'   => trim((string) ($row['Brand'] ?? '') . ' ' . $name),
+            'badge' => null,
+            'blurb' => product_blurb($row),
+            'sale'  => null,
+        ],
+        $row,
+        product_meta()[$id] ?? []
+    );
+}
+
+/**
+ * Products the homepage leads with — a curated cross-section of the range
+ * rather than "whatever was entered first". Ids are listed in display order;
+ * anything missing from the database is skipped.
+ */
+function featured_product_ids(): array
+{
+    return [1, 2, 3, 4, 6, 10, 21, 27, 35, 46, 51, 56];
+}
+
+/**
+ * The "was" price of a product, or null when it is not on offer.
+ */
+function sale_price(array $product): ?float
+{
+    $sale = $product['sale'] ?? null;
+    if ($sale === null || $sale === '') {
+        return null;
+    }
+
+    $was = (float) $sale;
+
+    return $was > (float) ($product['StandardPrice'] ?? 0) ? $was : null;
+}
+
+/**
+ * Discount percentage of an item on offer, rounded to one decimal.
+ */
+function discount_percent(array $product): float
+{
+    $was = sale_price($product);
+    if ($was === null) {
+        return 0.0;
+    }
+
+    return round(($was - (float) $product['StandardPrice']) / $was * 100, 1);
 }
 
 /**
@@ -144,7 +338,7 @@ function get_product_count(): int
     $rows = db_fetch_all('SELECT COUNT(*) AS n FROM product');
     $n = (int) ($rows[0]['n'] ?? 0);
 
-    return $n > 0 ? $n : count(product_meta());
+    return $n > 0 ? $n : count(offline_catalog());
 }
 
 /**
@@ -155,57 +349,42 @@ function get_product_count(): int
  */
 function get_featured_products(int $limit = 12): array
 {
-    $limit = max(1, min(50, $limit)); // sanitized — interpolated, not bound
-    $rows = db_fetch_all(
-        "SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
-                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
-                c.CategoryName
-         FROM product p
-         JOIN category c ON c.CategoryID = p.CategoryID
-         JOIN (SELECT MIN(ProductID) AS PickID FROM product GROUP BY CategoryID) pick
-              ON pick.PickID = p.ProductID
-         ORDER BY c.CategoryID
-         LIMIT $limit"
-    );
+    $limit = max(1, min(50, $limit));
+    $ids   = array_slice(featured_product_ids(), 0, $limit);
+    $rows  = [];
 
-    $products = [];
+    if ($ids) {
+        $holders = implode(',', array_fill(0, count($ids), '?'));
+        $rows    = db_fetch_all(
+            "SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                    p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                    c.CategoryName
+             FROM product p
+             JOIN category c ON c.CategoryID = p.CategoryID
+             WHERE p.ProductID IN ($holders)",
+            $ids
+        );
+    }
+
+    $byId = [];
     foreach ($rows as $row) {
-        $meta = product_meta()[(int) $row['ProductID']] ?? [
-            'image' => null,
-            'alt'   => $row['ProductName'],
-            'badge' => null,
-            'blurb' => '',
-            'sale'  => null,
-        ];
-        $products[] = array_merge($row, $meta);
+        $byId[(int) $row['ProductID']] = product_presentation($row);
+    }
+
+    // Keep the curated order, and skip anything the database does not have.
+    $products = [];
+    foreach ($ids as $id) {
+        if (isset($byId[$id])) {
+            $products[] = $byId[$id];
+        }
     }
 
     if ($products) {
         return array_slice($products, 0, $limit);
     }
 
-    // Offline fallback: one representative item per category, mirroring the
-    // live query's per-category pick. [id, name, brand, category, price, serialized, qty]
-    $fallback = [
-        [1, 'ProBook 450 G10',                    'HP',       'Laptops & Computers',   '144000.00', 1, 0],
-        [2, 'UltraSharp 27" 4K Monitor',          'Dell',     'Monitors & Displays',   '66000.00',  0, 45],
-        [3, 'CBS350-24T 24-Port Managed Switch',  'Cisco',    'Networking Equipment',  '102000.00', 1, 0],
-        [4, 'MX Master 3S Wireless Mouse',        'Logitech', 'Accessories',           '12000.00',  0, 120],
-    ];
-
-    $products = [];
-    foreach ($fallback as [$id, $name, $brand, $cat, $price, $serialized, $qty]) {
-        $products[] = array_merge(
-            [
-                'ProductID' => $id, 'ProductName' => $name, 'Brand' => $brand,
-                'CategoryName' => $cat, 'StandardPrice' => $price,
-                'StockQty' => $qty, 'IsSerialized' => $serialized,
-            ],
-            product_meta()[$id]
-        );
-    }
-
-    return array_slice($products, 0, $limit);
+    // Offline fallback: the curated items straight from the seed values.
+    return array_slice(offline_catalog(), 0, $limit);
 }
 
 /**
@@ -230,13 +409,7 @@ function get_products_by_category(int $categoryId, int $limit = 50): array
 
     $products = [];
     foreach ($rows as $row) {
-        $products[] = array_merge($row, product_meta()[(int) $row['ProductID']] ?? [
-            'image' => null,
-            'alt'   => $row['ProductName'],
-            'badge' => null,
-            'blurb' => '',
-            'sale'  => null,
-        ]);
+        $products[] = product_presentation($row);
     }
 
     return $products;
@@ -262,13 +435,7 @@ function related_products(int $productId, int $categoryId, int $limit = 4): arra
 
     $products = [];
     foreach ($rows as $row) {
-        $products[] = array_merge($row, product_meta()[(int) $row['ProductID']] ?? [
-            'image' => null,
-            'alt'   => $row['ProductName'],
-            'badge' => null,
-            'blurb' => '',
-            'sale'  => null,
-        ]);
+        $products[] = product_presentation($row);
     }
 
     return $products;
@@ -342,15 +509,8 @@ function get_product(int $productId): array
     }
 
     $row = $rows[0];
-    $meta = product_meta()[(int) $row['ProductID']] ?? [
-        'image' => null,
-        'alt'   => $row['ProductName'],
-        'badge' => null,
-        'blurb' => '',
-        'sale'  => null,
-    ];
 
-    return array_merge($row, $meta);
+    return product_presentation($row);
 }
 
 /**
@@ -489,13 +649,7 @@ function search_products(string $query, ?int $categoryId, int $limit): array
 
     $products = [];
     foreach ($rows as $row) {
-        $products[] = array_merge($row, product_meta()[(int) $row['ProductID']] ?? [
-            'image' => null,
-            'alt'   => $row['ProductName'],
-            'badge' => null,
-            'blurb' => '',
-            'sale'  => null,
-        ]);
+        $products[] = product_presentation($row);
     }
 
     if ($products) {
@@ -539,4 +693,249 @@ function search_products(string $query, ?int $categoryId, int $limit): array
 
     // Nothing matched anywhere — empty is the honest response.
     return [];
+}
+
+/* ------------------------------------------------------- shop / catalog
+ *
+ * The storefront pages read the catalog through the functions below: shop.php
+ * (filters, sorting, paging), categories.php (the category index) and deals.php
+ * (everything on offer). They all go through product_presentation(), so a card
+ * looks the same wherever it appears.
+ */
+
+/**
+ * Normalised filter arguments from a query string: search text, category,
+ * brand, sort key and page number. Parsed in one place so every page agrees on
+ * what ?q=&category=&brand=&sort=&page= means.
+ */
+function catalog_filters(array $input): array
+{
+    $sorts = ['featured', 'newest', 'price_asc', 'price_desc', 'name'];
+    $sort  = (string) ($input['sort'] ?? 'featured');
+
+    return [
+        'q'        => trim((string) ($input['q'] ?? '')),
+        'category' => max(0, (int) ($input['category'] ?? 0)),
+        'brand'    => trim((string) ($input['brand'] ?? '')),
+        'sort'     => in_array($sort, $sorts, true) ? $sort : 'featured',
+        'page'     => max(1, (int) ($input['page'] ?? 1)),
+        'per_page' => 12,
+    ];
+}
+
+/**
+ * WHERE clause plus bound parameters shared by the count and the page query.
+ * One placeholder per column: the connection runs native prepares, which reject
+ * a statement that names the same placeholder twice (SQLSTATE HY093).
+ */
+function catalog_where(array $filters): array
+{
+    $where  = [];
+    $params = [];
+
+    if ($filters['q'] !== '') {
+        $like          = '%' . $filters['q'] . '%';
+        $where[]       = '(p.ProductName LIKE :q1 OR p.Brand LIKE :q2 OR p.Model LIKE :q3)';
+        $params[':q1'] = $like;
+        $params[':q2'] = $like;
+        $params[':q3'] = $like;
+    }
+    if ($filters['category'] > 0) {
+        $where[]         = 'p.CategoryID = :cid';
+        $params[':cid']  = $filters['category'];
+    }
+    if ($filters['brand'] !== '') {
+        $where[]          = 'p.Brand = :brand';
+        $params[':brand'] = $filters['brand'];
+    }
+
+    return [$where ? 'WHERE ' . implode(' AND ', $where) : '', $params];
+}
+
+/**
+ * ORDER BY for a sort key — a whitelist match, never the raw request value.
+ */
+function catalog_order_by(string $sort): string
+{
+    // "Featured" is the default shop order: the homepage's curated picks first,
+    // then everything else newest-first. The ranks come from that helper, so the
+    // two pages always agree on what the shop leads with.
+    if ($sort === 'featured') {
+        $ids  = featured_product_ids();
+        $case = 'CASE p.ProductID';
+        foreach ($ids as $rank => $id) {
+            $case .= ' WHEN ' . (int) $id . ' THEN ' . (int) $rank;
+        }
+        $case .= ' ELSE ' . count($ids) . ' END';
+
+        return $case . ', p.ProductID DESC';
+    }
+
+    return match ($sort) {
+        'price_asc'  => 'p.StandardPrice ASC, p.ProductName ASC',
+        'price_desc' => 'p.StandardPrice DESC, p.ProductName ASC',
+        'name'       => 'p.ProductName ASC',
+        default      => 'p.ProductID DESC',
+    };
+}
+
+/**
+ * One page of the catalog, with presentation data merged in.
+ */
+function catalog_products(array $filters): array
+{
+    [$where, $params] = catalog_where($filters);
+    $limit  = max(1, min(48, (int) $filters['per_page']));
+    $offset = max(0, ((int) $filters['page'] - 1) * $limit);
+
+    $rows = db_fetch_all(
+        "SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                c.CategoryName
+         FROM product p
+         JOIN category c ON c.CategoryID = p.CategoryID
+         $where
+         ORDER BY " . catalog_order_by((string) $filters['sort']) . "
+         LIMIT $limit OFFSET $offset",
+        $params
+    );
+
+    $products = [];
+    foreach ($rows as $row) {
+        $products[] = product_presentation($row);
+    }
+
+    return $products;
+}
+
+/**
+ * How many products the filters match in total, so shop.php can page.
+ */
+function catalog_total(array $filters): int
+{
+    [$where, $params] = catalog_where($filters);
+    $rows = db_fetch_all(
+        "SELECT COUNT(*) AS n
+         FROM product p
+         JOIN category c ON c.CategoryID = p.CategoryID
+         $where",
+        $params
+    );
+
+    return (int) ($rows[0]['n'] ?? 0);
+}
+
+/**
+ * Distinct brands with product counts, for the shop sidebar.
+ */
+function catalog_brands(): array
+{
+    return db_fetch_all(
+        "SELECT Brand, COUNT(*) AS Products
+         FROM product
+         WHERE Brand IS NOT NULL AND Brand <> ''
+         GROUP BY Brand
+         ORDER BY Brand"
+    );
+}
+
+/**
+ * Category rows with a product count and an entry price, for categories.php.
+ */
+function category_overview(): array
+{
+    $rows = db_fetch_all(
+        'SELECT c.CategoryID, c.CategoryName, COUNT(p.ProductID) AS Products,
+                MIN(p.StandardPrice) AS FromPrice
+         FROM category c
+         LEFT JOIN product p ON p.CategoryID = c.CategoryID
+         GROUP BY c.CategoryID, c.CategoryName
+         ORDER BY c.CategoryID'
+    );
+
+    if ($rows) {
+        return $rows;
+    }
+
+    // Offline: the category list without counts.
+    $fallback = [];
+    foreach (get_categories() as $category) {
+        $fallback[] = $category + ['Products' => 0, 'FromPrice' => null];
+    }
+
+    return $fallback;
+}
+
+/**
+ * Products on offer, biggest saving first — the deals pages.
+ *
+ * The "was" price is storefront merchandising, not a database column, so the
+ * shortlist is filtered and sorted here rather than in SQL. The catalog is
+ * small enough that reading it whole costs nothing; a bigger range would want
+ * a SalePrice column and a query-level filter.
+ */
+function deal_products(int $limit = 24): array
+{
+    $rows = db_fetch_all(
+        "SELECT p.ProductID, p.ProductName, p.Brand, p.Model, p.StandardPrice,
+                p.IsSerialized, p.StockQty, p.DefaultWarrantyMonths,
+                c.CategoryName
+         FROM product p
+         JOIN category c ON c.CategoryID = p.CategoryID
+         ORDER BY p.ProductID"
+    );
+
+    $deals = [];
+    foreach ($rows as $row) {
+        $product = product_presentation($row);
+        if (sale_price($product) !== null) {
+            $deals[] = $product;
+        }
+    }
+
+    usort($deals, fn(array $a, array $b) => discount_percent($b) <=> discount_percent($a));
+
+    if (!$deals) {
+        // Offline: whatever the seed's presentation map marks as on offer.
+        foreach (offline_catalog() as $product) {
+            if (sale_price($product) !== null) {
+                $deals[] = $product;
+            }
+        }
+        usort($deals, fn(array $a, array $b) => discount_percent($b) <=> discount_percent($a));
+    }
+
+    return array_slice($deals, 0, max(1, $limit));
+}
+
+/**
+ * shop.php URL for a filter set, with overrides applied — the link builder
+ * behind the sort control, the brand/category facets and the pager. Defaults
+ * are dropped so the URL stays readable and shareable.
+ */
+function shop_url(array $filters, array $overrides = []): string
+{
+    $merged = array_merge([
+        'q'        => $filters['q'] ?? '',
+        'category' => $filters['category'] ?? 0,
+        'brand'    => $filters['brand'] ?? '',
+        'sort'     => $filters['sort'] ?? 'featured',
+        'page'     => $filters['page'] ?? 1,
+    ], $overrides);
+
+    $query = [];
+    foreach ($merged as $key => $value) {
+        if ($key === 'page' && (int) $value <= 1) {
+            continue;
+        }
+        if ($key === 'sort' && $value === 'featured') {
+            continue;
+        }
+        if ($value === '' || $value === 0 || $value === null) {
+            continue;
+        }
+        $query[$key] = $value;
+    }
+
+    return 'shop.php' . ($query ? '?' . http_build_query($query) : '');
 }

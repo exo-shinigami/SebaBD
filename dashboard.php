@@ -164,6 +164,13 @@ $myQuotes     = [];
 $myInvoices   = [];
 $clientKpis   = [];
 
+// Every customer — personal or company — has a `client` row: it is the party
+// invoices and quotations are addressed to (an individual's row just carries
+// their own name). "Does a row exist" is therefore not "is this a company";
+// client.AccountType is what tells them apart, and the customer panels below
+// branch on it so a personal account is never shown company wording.
+$clientIsCompany = false;
+
 if (!$isStaff && $dbUp) {
     $profileRows = db_fetch_all(
         'SELECT Username, Email, Phone, CreatedAt FROM `user` WHERE UserID = :id',
@@ -172,11 +179,12 @@ if (!$isStaff && $dbUp) {
     $profile = $profileRows[0] ?? [];
 
     $clientRows = db_fetch_all(
-        'SELECT ClientID, CompanyName, ContactPerson, Email, Phone, Address
+        'SELECT ClientID, CompanyName, ContactPerson, Email, Phone, Address, AccountType
          FROM client WHERE UserID = :uid LIMIT 1',
         [':uid' => (int) $user['UserID']]
     );
-    $client = $clientRows[0] ?? null;
+    $client         = $clientRows[0] ?? null;
+    $clientIsCompany = $client !== null && ($client['AccountType'] ?? '') === 'b2b';
 
     if ($client) {
         $branches = db_fetch_all(
@@ -235,14 +243,21 @@ if (!$isStaff && $dbUp) {
         ['icon' => 'fa-solid fa-receipt', 'label' => 'My orders', 'value' => number_format(count($myOrders)), 'hint' => 'Placed with your login'],
         ['icon' => 'fa-solid fa-file-signature', 'label' => 'Open quotations', 'value' => number_format($openQuotes), 'hint' => count($myQuotes) . ' total on file'],
         ['icon' => 'fa-solid fa-hand-holding-dollar', 'label' => 'Balance due', 'value' => money($due), 'hint' => count($myInvoices) . ' invoice(s)'],
-        [
-            'icon' => 'fa-solid fa-building',
-            'label' => 'Company branches',
-            'value' => ($client && count($branches)) ? number_format(count($branches)) : '—',
-            'hint'  => ($client && ($client['AccountType'] ?? '') !== 'b2b')
-                ? 'Personal account — no branches'
-                : ($client ? (string) $client['CompanyName'] : 'Retail account'),
-        ],
+        // A personal account has no branches, so its fourth tile talks about the
+        // account type instead of showing an empty company card.
+        $clientIsCompany
+            ? [
+                'icon'  => 'fa-solid fa-building',
+                'label' => 'Company branches',
+                'value' => $client ? number_format(count($branches)) : '—',
+                'hint'  => $client ? (string) $client['CompanyName'] : 'Company account',
+            ]
+            : [
+                'icon'  => 'fa-solid fa-user',
+                'label' => 'Account type',
+                'value' => 'Personal',
+                'hint'  => 'Individual shopper — no branches',
+            ],
     ];
 }
 ?>
@@ -255,7 +270,7 @@ if (!$isStaff && $dbUp) {
     <p class="mb-0 report-lead-sub">
       <?php if ($isStaff): ?>
         Here is what is happening across the store today — orders, quotations, stock and payments.
-      <?php elseif ($client): ?>
+      <?php elseif ($clientIsCompany): ?>
         Your orders, quotations and invoices with <strong><?= htmlspecialchars($client['CompanyName']) ?></strong>,
         all in one place.
       <?php else: ?>
@@ -392,7 +407,7 @@ if (!$isStaff && $dbUp) {
         <?php else: ?>
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0 report-th">
-            <thead><tr><th>Invoice</th><th>Company / branch</th><th>Date</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
+            <thead><tr><th>Invoice</th><th><?= $clientIsCompany ? 'Company / branch' : 'Billed to' ?></th><th>Date</th><th>Total</th><th>Balance</th><th>Status</th></tr></thead>
             <tbody>
               <?php foreach ($receivables as $row): ?>
               <tr>
@@ -423,7 +438,7 @@ if (!$isStaff && $dbUp) {
         <?php else: ?>
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0 report-th">
-            <thead><tr><th>#</th><th>Subject</th><th>Company</th><th>Date</th><th>Total</th><th>Status</th></tr></thead>
+            <thead><tr><th>#</th><th>Subject</th><th><?= $clientIsCompany ? 'Company' : 'Billed to' ?></th><th>Date</th><th>Total</th><th>Status</th></tr></thead>
             <tbody>
               <?php foreach ($latestQuotes as $row): ?>
               <tr>
@@ -501,7 +516,7 @@ if (!$isStaff && $dbUp) {
         </div>
         <?php if (!$myOrders): ?>
         <p class="text-muted mb-3">You have not placed an order yet.</p>
-        <a class="btn btn-accent btn-sm" href="index.php?all=1#featured-products"><i class="fa-solid fa-cart-shopping me-2"></i>Browse products</a>
+        <a class="btn btn-accent btn-sm" href="shop.php"><i class="fa-solid fa-cart-shopping me-2"></i>Browse products</a>
         <?php else: ?>
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0 report-th">
@@ -527,8 +542,10 @@ if (!$isStaff && $dbUp) {
     <div class="col-lg-5">
       <div class="report-panel h-100 mb-0">
         <div class="report-panel-head">
-          <h2 class="report-panel-title">Account &amp; company</h2>
-          <p class="report-panel-sub">Your contact and delivery details on file.</p>
+          <h2 class="report-panel-title"><?= $clientIsCompany ? 'Account &amp; company' : 'Account details' ?></h2>
+          <p class="report-panel-sub"><?= $clientIsCompany
+              ? 'Your company details as the sales desk holds them.'
+              : 'Your contact and delivery details on file.' ?></p>
         </div>
         <dl class="row mb-0 dash-dl">
           <dt class="col-sm-4">Username</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($profile['Username'] ?? $user['Username'])) ?></dd>
@@ -536,10 +553,12 @@ if (!$isStaff && $dbUp) {
           <dt class="col-sm-4">Phone</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($profile['Phone'] ?? '—')) ?></dd>
           <dt class="col-sm-4">Type</dt><dd class="col-sm-8"><?= $user['RoleID'] !== null ? 'SebaBD staff — ' . htmlspecialchars((string) $user['RoleName']) : 'Customer' ?></dd>
           <dt class="col-sm-4">Member since</dt><dd class="col-sm-8"><?= htmlspecialchars((string) (isset($profile['CreatedAt']) ? date('d M Y', strtotime((string) $profile['CreatedAt'])) : '—')) ?></dd>
-          <?php if ($client): ?>
+          <?php if ($clientIsCompany): ?>
           <dt class="col-sm-4">Company</dt><dd class="col-sm-8"><?= htmlspecialchars($client['CompanyName']) ?></dd>
           <dt class="col-sm-4">Contact</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($client['ContactPerson'] ?? '—')) ?><?= !empty($client['Phone']) ? ' · ' . htmlspecialchars((string) $client['Phone']) : '' ?></dd>
           <dt class="col-sm-4">Address</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($client['Address'] ?? '—')) ?></dd>
+          <?php elseif ($client): ?>
+          <dt class="col-sm-4">Billed to</dt><dd class="col-sm-8"><?= htmlspecialchars((string) ($client['ContactPerson'] ?: $client['CompanyName'])) ?></dd>
           <?php endif; ?>
         </dl>
         <?php if ($branches): ?>
@@ -564,7 +583,11 @@ if (!$isStaff && $dbUp) {
       <div class="report-panel h-100 mb-0">
         <div class="report-panel-head">
           <h2 class="report-panel-title">My quotations</h2>
-          <p class="report-panel-sub">Quotation requests we have prepared for your company.</p>
+          <p class="report-panel-sub"><?= $clientIsCompany
+              ? 'Quotation requests we have prepared for your company.'
+              : (can_request_quotation($user)
+                  ? 'Quotation requests filed under your own account — no company or branch needed.'
+                  : 'Quotations are prepared for company accounts — a personal account buys from the shop.') ?></p>
         </div>
         <?php if (!$myQuotes): ?>
         <p class="text-muted mb-3"><?= $client ? 'No quotations have been prepared for you yet.' : 'Quotations are linked to your customer record.' ?></p>
@@ -600,7 +623,9 @@ if (!$isStaff && $dbUp) {
           <p class="report-panel-sub">What you have been billed and what is still outstanding.</p>
         </div>
         <?php if (!$myInvoices): ?>
-        <p class="text-muted mb-0">No invoices are linked to your company yet.</p>
+        <p class="text-muted mb-0"><?= $clientIsCompany
+            ? 'No invoices are linked to your company yet.'
+            : 'No invoices have been raised for your account yet.' ?></p>
         <?php else: ?>
         <ul class="list-unstyled mb-0 dash-list">
           <?php foreach ($myInvoices as $row): ?>
@@ -633,7 +658,7 @@ if (!$isStaff && $dbUp) {
       <?php if (can_request_quotation($user)): ?>
       <a class="btn btn-outline-dark" href="quotation-request.php"><i class="fa-solid fa-file-invoice me-2"></i>Request quotation</a>
       <?php endif; ?>
-      <a class="btn btn-outline-dark" href="index.php?all=1#featured-products">Browse the catalog</a>
+      <a class="btn btn-outline-dark" href="shop.php">Browse the catalog</a>
       <?php if (!$client): ?>
       <a class="btn btn-outline-dark" href="b2b-registration.php">Register a company</a>
       <?php endif; ?>

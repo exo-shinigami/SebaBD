@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="Security camera illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="dome" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4854"/>
+      <stop offset="1" stop-color="#1b242c"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="235" r="150" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- ceiling mount -->
+  <rect x="248" y="118" width="104" height="26" rx="6" fill="#5d6b77"/>
+
+  <!-- camera base plate -->
+  <rect x="212" y="144" width="176" height="34" rx="10" fill="url(#dome)"/>
+
+  <!-- dome -->
+  <path d="M212 178 h176 a88 88 0 0 1 -176 0 z" fill="#1b242c"/>
+  <path d="M240 186 a60 60 0 0 0 120 0 z" fill="#0ea5b5" opacity="0.28"/>
+  <circle cx="300" cy="214" r="20" fill="#0f1720"/>
+  <circle cx="300" cy="214" r="9" fill="#37d3c3"/>
+
+  <!-- signal arcs -->
+  <g fill="none" stroke="#0ea5b5" stroke-width="6" stroke-linecap="round" opacity="0.7">
+    <path d="M420 190 a46 46 0 0 0 0 -52"/>
+    <path d="M446 202 a76 76 0 0 0 0 -76"/>
+  </g>
+
+  <ellipse cx="300" cy="322" rx="150" ry="14" fill="#1b242c" opacity="0.08"/>
+</svg>

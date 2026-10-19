@@ -33,3 +33,8 @@ assets/report-assets/
 # PHP and Composer generated files
 composer.lock
 .phpunit.result.cache
+
+# Local-only sign-in crib sheet: holds the seeded demo passwords, so it stays
+# on this machine. The sample accounts themselves are documented in README.md
+# and installed by database/e_commerce.sql.
+LOGIN-INFO.txt

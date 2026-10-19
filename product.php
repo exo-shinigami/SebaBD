@@ -47,8 +47,7 @@ $discount = $wasPrice > 0 ? ($wasPrice - $current) / $wasPrice * 100 : 0.0;
 // write paths refuse them anyway, so hiding here is not the only barrier.
 // Quotations are a company flow: an individual customer sees the buy controls
 // but no quotation button.
-$canBuy   = !is_staff_user();
-$canQuote = $canBuy && can_request_quotation();
+$canBuy   = !is_staff_user(); $canQuote = $canBuy && can_request_quotation();
 $orderUrl     = $canBuy ? 'order.php?product=' . $productId . '&qty=1' : '';
 $quotationUrl = $canQuote ? 'quotation-request.php?product=' . $productId . '&qty=1' : '';
 ?>
@@ -64,7 +63,7 @@ $quotationUrl = $canQuote ? 'quotation-request.php?product=' . $productId . '&qt
         <?= $productId > 0 ? 'Product #' . $productId . ' does not exist in the catalog.' : 'No product was requested.' ?>
         It may have been removed, or the link may be out of date.
       </p>
-      <a class="btn btn-accent" href="index.php?all=1#featured-products">Browse the catalog</a>
+      <a class="btn btn-accent" href="shop.php">Browse the catalog</a>
     </div>
   </div>
 </section>
@@ -74,7 +73,7 @@ $quotationUrl = $canQuote ? 'quotation-request.php?product=' . $productId . '&qt
     <nav aria-label="breadcrumb">
       <ol class="breadcrumb crumb mb-3">
         <li class="breadcrumb-item"><a href="index.php">Home</a></li>
-        <li class="breadcrumb-item"><a href="index.php?category=<?= (int) $product['CategoryID'] ?>#featured-products"><?= htmlspecialchars($product['CategoryName']) ?></a></li>
+        <li class="breadcrumb-item"><a href="shop.php?category=<?= (int) $product['CategoryID'] ?>"><?= htmlspecialchars($product['CategoryName']) ?></a></li>
         <li class="breadcrumb-item active" aria-current="page"><?= htmlspecialchars($product['ProductName']) ?></li>
       </ol>
     </nav>
@@ -162,7 +161,7 @@ $quotationUrl = $canQuote ? 'quotation-request.php?product=' . $productId . '&qt
             <div class="table-responsive">
               <table class="table table-sm spec-table mb-0">
                 <tbody>
-                  <tr><th scope="row">Category</th><td><a href="index.php?category=<?= (int) $product['CategoryID'] ?>#featured-products"><?= htmlspecialchars($product['CategoryName']) ?></a></td></tr>
+                  <tr><th scope="row">Category</th><td><a href="shop.php?category=<?= (int) $product['CategoryID'] ?>"><?= htmlspecialchars($product['CategoryName']) ?></a></td></tr>
                   <tr><th scope="row">Brand / model</th><td><?= htmlspecialchars($product['Brand'] ?? '—') ?> / <?= htmlspecialchars($product['Model'] ?? '—') ?></td></tr>
                   <tr><th scope="row">Default warranty</th><td><?= (int) $product['DefaultWarrantyMonths'] ?> months</td></tr>
                   <tr><th scope="row">Stock type</th><td><?= ((int) $product['IsSerialized']) === 1 ? 'Each unit tracked by serial number' : 'Sold from bulk stock' ?></td></tr>
@@ -220,7 +219,7 @@ $quotationUrl = $canQuote ? 'quotation-request.php?product=' . $productId . '&qt
           <p class="section-label mb-1">More in <?= htmlspecialchars($product['CategoryName']) ?></p>
           <h2 class="h4 mb-0">Related products</h2>
         </div>
-        <a class="text-decoration-none" href="index.php?category=<?= (int) $product['CategoryID'] ?>#featured-products">See the whole category</a>
+        <a class="text-decoration-none" href="shop.php?category=<?= (int) $product['CategoryID'] ?>">See the whole category</a>
       </div>
       <div class="row g-4">
         <?php $relatedCounts = stock_counts($related); ?>

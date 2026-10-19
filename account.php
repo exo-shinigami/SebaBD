@@ -341,18 +341,23 @@ $page_title = 'My account';
         <?php if ($company): ?>
         <div class="report-panel mb-4">
           <div class="report-panel-head">
-            <h2 class="report-panel-title">Company</h2>
-            <p class="report-panel-sub">Used on every quotation and invoice addressed to you.</p>
+            <h2 class="report-panel-title"><?= $isB2B ? 'Company' : 'Your customer record' ?></h2>
+            <p class="report-panel-sub"><?= $isB2B
+                ? 'Used on every quotation and invoice addressed to your company.'
+                : 'The name our paperwork is addressed to when we invoice you.' ?></p>
           </div>
           <table class="table table-sm mb-3">
             <tbody>
-              <tr><th scope="row" class="text-muted fw-normal">Company</th><td class="text-end fw-semibold"><?= htmlspecialchars($company['CompanyName']) ?></td></tr>
+              <tr><th scope="row" class="text-muted fw-normal"><?= $isB2B ? 'Company' : 'Billed to' ?></th><td class="text-end fw-semibold"><?= htmlspecialchars($company['CompanyName']) ?></td></tr>
+              <?php if ($isB2B): ?>
               <tr><th scope="row" class="text-muted fw-normal">Contact</th><td class="text-end"><?= htmlspecialchars((string) ($company['ContactPerson'] ?: '—')) ?></td></tr>
+              <?php endif; ?>
               <tr><th scope="row" class="text-muted fw-normal">Email</th><td class="text-end"><?= htmlspecialchars((string) ($company['Email'] ?: '—')) ?></td></tr>
               <tr><th scope="row" class="text-muted fw-normal">Phone</th><td class="text-end"><?= htmlspecialchars((string) ($company['Phone'] ?: '—')) ?></td></tr>
             </tbody>
           </table>
 
+          <?php if ($isB2B): ?>
           <div class="document-block-title">Branches (<?= count($branches) ?>)</div>
           <?php foreach ($branches as $branch): ?>
           <div class="branch-card">
@@ -368,6 +373,13 @@ $page_title = 'My account';
             Company and branch records are managed by the sales desk — ask your account manager to change
             an address, and every future document follows it.
           </p>
+          <?php else: ?>
+          <p class="small text-muted mb-0 mt-3">
+            A personal account carries no company or branches. If you begin buying for a company,
+            <a href="b2b-registration.php">register it</a> and its branches, quotations and invoices
+            appear here.
+          </p>
+          <?php endif; ?>
         </div>
         <?php endif; ?>
 
@@ -397,7 +409,7 @@ $page_title = 'My account';
           </table>
           <?php else: ?>
           <p class="text-muted small mb-0">
-            No orders yet. <a href="index.php?all=1#featured-products">Browse the catalog</a> — the basket works
+            No orders yet. <a href="shop.php">Browse the catalog</a> — the basket works
             before you sign in, too.
           </p>
           <?php endif; ?>
@@ -429,8 +441,7 @@ $page_title = 'My account';
             </tbody>
           </table>
           <?php else: ?>
-          <p class="text-muted small mb-0">
-            No quotations yet.<?= can_request_quotation() ? ' <a href="quotation-request.php">Request one</a> and a sales manager will price it.' : '' ?>
+          <p class="text-muted small mb-0">             No quotations yet.<?= can_request_quotation() ? ' <a href="quotation-request.php">Request one</a> and a sales manager will price it.' : '' ?>
           </p>
           <?php endif; ?>
         </div>

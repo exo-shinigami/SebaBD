@@ -2,9 +2,9 @@
 /**
  * SebaBD — one storefront product card.
  *
- * Shared by the homepage/storefront grid (partials/product-panel.php) and the
- * related-products strip on product.php, so the card markup lives in exactly
- * one place.
+ * Shared by the storefront grid on every page that shows products — index.php,
+ * shop.php, deals.php — and by the related-products strip on product.php, so
+ * the card markup lives in exactly one place.
  *
  * Expects:
  *   $product   array  row shaped like get_featured_products()

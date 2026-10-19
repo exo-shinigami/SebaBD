@@ -148,6 +148,8 @@ echo partial_render('partials/document.php', [
           . 'This quotation is already invoiced as <a href="invoice.php?no=' . (int) $invoice['InvoiceNo'] . '">#'
           . (int) $invoice['InvoiceNo'] . '</a> (' . htmlspecialchars($invoice['PaymentStatus']) . ').</div>'
         : '',
+    'download_href'    => 'download.php?doc=quotation&no=' . (int) $quotation['QuotationNo'],
+    'download_csv_href' => 'download.php?doc=quotation&no=' . (int) $quotation['QuotationNo'] . '&format=csv',
     'back_href'        => is_staff_user($user) ? 'admin-quotations.php' : 'dashboard.php',
     'back_label'       => is_staff_user($user) ? 'All quotations' : 'My dashboard',
 ]);

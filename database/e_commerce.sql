@@ -117,11 +117,15 @@ CREATE TABLE `category` (
   `CategoryName` varchar(255) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Categories (the storefront groups the catalog under these six).
 INSERT INTO `category` (`CategoryID`, `CategoryName`) VALUES
 (1, 'Laptops & Computers'),
 (2, 'Monitors & Displays'),
 (3, 'Networking Equipment'),
-(4, 'Accessories');
+(4, 'Accessories'),
+(5, 'Printers & Scanners'),
+(6, 'Storage & Components')
+ON DUPLICATE KEY UPDATE `CategoryName` = VALUES(`CategoryName`);
 
 -- ===========================================================================
 -- 2. vendor — supplier of products
@@ -157,11 +161,70 @@ CREATE TABLE `product` (
   `DefaultWarrantyMonths` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Products. Prices reviewed against Bangladeshi retail listings (October 2026);
+-- StockQty is the bulk count — serialized items carry their units in product_instance,
+-- so their StockQty stays 0.
 INSERT INTO `product` (`ProductID`, `CategoryID`, `VendorID`, `ProductName`, `Brand`, `Model`, `StandardPrice`, `IsSerialized`, `StockQty`, `DefaultWarrantyMonths`) VALUES
-(1, 1, 1, 'ProBook 450 G10', 'HP', '450 G10', 144000.00, 1, 0, 24),
-(2, 2, 2, 'UltraSharp 27\" 4K Monitor', 'Dell', 'U2723QE', 66000.00, 0, 45, 12),
-(3, 3, 3, 'CBS350-24T 24-Port Managed Switch', 'Cisco', 'CBS350-24T', 102000.00, 1, 0, 36),
-(4, 4, 4, 'MX Master 3S Wireless Mouse', 'Logitech', 'MX Master 3S', 12000.00, 0, 120, 12);
+(1, 1, 1, 'ProBook 450 G10', 'HP', '450 G10', 99500.00, 1, 0, 24),
+(5, 1, 1, '250 G9', 'HP', '250 G9', 62500.00, 1, 0, 12),
+(6, 1, 1, 'Inspiron 15 3530', 'Dell', '3530', 68500.00, 1, 0, 24),
+(7, 1, 2, 'IdeaPad Slim 3', 'Lenovo', '15IRH10', 83000.00, 1, 0, 24),
+(8, 1, 2, 'VivoBook 15', 'Asus', 'X1504ZA', 70000.00, 1, 0, 24),
+(9, 1, 2, 'Aspire 5', 'Acer', 'A515-56G', 75000.00, 1, 0, 24),
+(10, 1, 3, 'MacBook Air M2 13"', 'Apple', 'M2 8GB/256GB', 102000.00, 1, 0, 12),
+(11, 1, 1, '15s fd0841TU', 'HP', '15s-fd0841TU', 64800.00, 1, 0, 12),
+(12, 1, 1, 'Vostro 3520', 'Dell', '3520', 66000.00, 1, 0, 24),
+(13, 1, 2, 'ThinkPad E14 Gen 5', 'Lenovo', 'E14 Gen 5', 105000.00, 1, 0, 36),
+(14, 1, 2, 'TUF Gaming F15', 'Asus', 'FX506HF', 95000.00, 1, 0, 24),
+(15, 1, 1, 'EliteBook 640 G9', 'HP', '640 G9', 118000.00, 1, 0, 36),
+(16, 1, 1, 'Latitude 3440', 'Dell', '3440', 112000.00, 1, 0, 36),
+(17, 1, 2, 'V15 G4 IRU', 'Lenovo', 'V15 G4', 72000.00, 1, 0, 12),
+(2, 2, 2, 'UltraSharp 27" 4K Monitor', 'Dell', 'U2723QE', 125000.00, 0, 18, 36),
+(18, 2, 2, 'S2421HN 24" IPS Monitor', 'Dell', 'S2421HN', 16500.00, 0, 60, 36),
+(19, 2, 1, 'M22f 21.5" FHD Monitor', 'HP', 'M22f', 14500.00, 0, 75, 36),
+(20, 2, 3, 'LS24C310 24" FHD Monitor', 'Samsung', 'LS24C310', 18200.00, 0, 40, 36),
+(21, 2, 3, '27UP600-W 27" 4K Monitor', 'LG', '27UP600-W', 53500.00, 0, 12, 36),
+(22, 2, 2, 'Redmi RMMNT215NF Monitor', 'Xiaomi', 'RMMNT215NF', 10800.00, 0, 90, 24),
+(23, 2, 3, 'GW2480 24" IPS Monitor', 'BenQ', 'GW2480', 17500.00, 0, 35, 36),
+(24, 2, 2, 'VA24EHE 24" FHD Monitor', 'Asus', 'VA24EHE', 15900.00, 0, 50, 36),
+(25, 2, 1, 'V22v 21.5" Monitor', 'HP', 'V22v', 12500.00, 0, 65, 24),
+(3, 3, 3, 'CBS350-24T 24-Port Managed Switch', 'Cisco', 'CBS350-24T', 35000.00, 1, 0, 36),
+(26, 3, 3, 'CBS350-8T 8-Port Managed Switch', 'Cisco', 'CBS350-8T', 22000.00, 1, 0, 36),
+(27, 3, 2, 'Archer C6 AC1200 Router', 'TP-Link', 'Archer C6', 3300.00, 0, 140, 36),
+(28, 3, 2, 'TL-SG108 8-Port Gigabit Switch', 'TP-Link', 'TL-SG108', 2500.00, 0, 160, 36),
+(29, 3, 4, 'DIR-825 AC1200 Router', 'D-Link', 'DIR-825', 3330.00, 0, 85, 24),
+(30, 3, 4, 'hEX S RB760iGS Router', 'MikroTik', 'RB760iGS', 8950.00, 0, 45, 12),
+(31, 3, 3, 'UniFi U6+ Access Point', 'Ubiquiti', 'U6+', 19000.00, 1, 0, 24),
+(32, 3, 2, 'TL-WA855RE Range Extender', 'TP-Link', 'TL-WA855RE', 1650.00, 0, 110, 12),
+(33, 3, 4, 'GS308 8-Port Gigabit Switch', 'Netgear', 'GS308', 3600.00, 0, 55, 36),
+(34, 3, 2, 'Omada EAP225 Access Point', 'TP-Link', 'EAP225', 8200.00, 1, 0, 36),
+(4, 4, 4, 'MX Master 3S Wireless Mouse', 'Logitech', 'MX Master 3S', 9999.00, 0, 120, 12),
+(35, 4, 4, 'K380 Multi-Device Keyboard', 'Logitech', 'K380', 3200.00, 0, 95, 12),
+(36, 4, 4, 'OP-620D Wired Mouse', 'A4Tech', 'OP-620D', 525.00, 0, 300, 12),
+(37, 4, 2, 'KB216 Wired Keyboard', 'Dell', 'KB216', 650.00, 0, 200, 12),
+(38, 4, 4, '5-in-1 USB-C Hub', 'Anker', 'A8346', 3700.00, 0, 70, 18),
+(39, 4, 2, 'USB-C to HDMI Cable 1.5m', 'UGREEN', 'CM315', 1500.00, 0, 120, 12),
+(40, 4, 4, 'C270 HD Webcam', 'Logitech', 'C270', 2600.00, 0, 65, 12),
+(41, 4, 4, 'H340 USB Headset', 'Logitech', 'H340', 2900.00, 0, 50, 12),
+(42, 4, 4, '600VA UPS', 'Walton', '600VA', 4750.00, 0, 30, 12),
+(43, 4, 2, '2MP Dome Camera', 'Hikvision', 'DS-2CE56D0T', 1800.00, 0, 80, 12),
+(45, 5, 1, 'LaserJet Pro M404dn Printer', 'HP', 'M404dn', 50000.00, 0, 15, 12),
+(46, 5, 3, 'EcoTank L3250 All-in-One', 'Epson', 'L3250', 24000.00, 0, 40, 12),
+(47, 5, 3, 'PIXMA G2010 All-in-One', 'Canon', 'G2010', 17500.00, 0, 45, 12),
+(48, 5, 1, 'LaserJet M111a Printer', 'HP', 'M111a', 17000.00, 0, 25, 12),
+(49, 5, 3, 'EcoTank L3210 All-in-One', 'Epson', 'L3210', 22500.00, 0, 30, 12),
+(50, 5, 3, 'PIXMA G3010 All-in-One', 'Canon', 'G3010', 19500.00, 0, 28, 12),
+(51, 6, 3, '980 500GB NVMe SSD', 'Samsung', 'MZ-V8V500', 5900.00, 0, 60, 36),
+(52, 6, 4, 'A400 480GB SATA SSD', 'Kingston', 'SA400S37', 4100.00, 0, 80, 36),
+(53, 6, 2, 'Barracuda 1TB HDD', 'Seagate', 'ST1000DM010', 5000.00, 0, 75, 24),
+(54, 6, 4, 'Green 240GB SATA SSD', 'WD', 'WDS240G3G0A', 2700.00, 0, 100, 36),
+(55, 6, 4, 'FURY 8GB DDR4 3200MHz', 'Kingston', 'KF432C16BB/8', 2400.00, 0, 90, 36),
+(56, 6, 4, '980 PRO 1TB NVMe SSD', 'Samsung', 'MZ-V8P1T0', 12500.00, 0, 22, 60),
+(57, 6, 2, 'Barracuda 2TB HDD', 'Seagate', 'ST2000DM008', 8300.00, 0, 35, 24)
+ON DUPLICATE KEY UPDATE `CategoryID` = VALUES(`CategoryID`), `VendorID` = VALUES(`VendorID`),
+  `ProductName` = VALUES(`ProductName`), `Brand` = VALUES(`Brand`), `Model` = VALUES(`Model`),
+  `StandardPrice` = VALUES(`StandardPrice`), `IsSerialized` = VALUES(`IsSerialized`),
+  `StockQty` = VALUES(`StockQty`), `DefaultWarrantyMonths` = VALUES(`DefaultWarrantyMonths`);
 
 -- ===========================================================================
 -- 4. product_instance — one serialized unit (only for IsSerialized products)
@@ -185,6 +248,61 @@ INSERT INTO `product_instance` (`EquipmentID`, `ProductID`, `SerialNumber`, `Pur
 (2, 1, '5CG1427W9L', '2024-01-15', '2026-01-15', '2026-01-15', 'Sold'),
 (3, 3, 'FOC2341X0AB', '2024-02-01', '2027-02-01', '2027-02-01', 'In Stock'),
 (4, 3, 'FOC2341X0AC', '2024-02-01', '2027-02-01', '2027-02-01', 'Sold');
+
+-- One serialized unit per tracked device: laptops and networking gear are
+-- serial-tracked (product 3 keeps its original two rows from the base seed).
+INSERT INTO `product_instance` (`EquipmentID`, `ProductID`, `SerialNumber`, `PurchaseDate`, `VendorWarrantyExpiry`, `ClientWarrantyExpiry`, `Status`) VALUES
+(11, 1, '5CGD03A60', '2025-11-06', '2027-11-06', '2027-11-06', 'In Stock'),
+(12, 1, '5CG768B34', '2025-12-05', '2027-12-05', '2027-12-05', 'In Stock'),
+(13, 1, '5CG178AA5', '2026-01-03', '2028-01-03', '2028-01-03', 'In Stock'),
+(51, 5, '5CGD787D4', '2025-12-04', '2026-12-04', '2026-12-04', 'In Stock'),
+(52, 5, '5CGB5C450', '2026-01-02', '2027-01-02', '2027-01-02', 'In Stock'),
+(61, 6, 'DLB5B5F6', '2025-12-11', '2027-12-11', '2027-12-11', 'In Stock'),
+(62, 6, 'DL38DD6D', '2026-01-09', '2028-01-09', '2028-01-09', 'In Stock'),
+(63, 6, 'DLCF60EF', '2026-02-07', '2028-02-07', '2028-02-07', 'In Stock'),
+(71, 7, 'PFBEAF61', '2025-12-18', '2027-12-18', '2027-12-18', 'In Stock'),
+(72, 7, 'PF6721F7', '2026-01-16', '2028-01-16', '2028-01-16', 'In Stock'),
+(73, 7, 'PF5804AF', '2026-02-14', '2028-02-14', '2028-02-14', 'In Stock'),
+(81, 8, 'ASN4BF44D', '2025-12-25', '2027-12-25', '2027-12-25', 'In Stock'),
+(82, 8, 'ASN2307AC', '2026-01-23', '2028-01-23', '2028-01-23', 'In Stock'),
+(83, 8, 'ASN377658', '2026-02-21', '2028-02-21', '2028-02-21', 'In Stock'),
+(91, 9, 'ACREC5B96', '2026-01-01', '2028-01-01', '2028-01-01', 'In Stock'),
+(92, 9, 'ACR2AA322', '2026-01-30', '2028-01-30', '2028-01-30', 'In Stock'),
+(93, 9, 'ACR135192', '2026-02-28', '2028-02-28', '2028-02-28', 'In Stock'),
+(101, 10, 'C0289A62F', '2026-01-08', '2027-01-08', '2027-01-08', 'In Stock'),
+(102, 10, 'C02E01956', '2026-02-06', '2027-02-06', '2027-02-06', 'In Stock'),
+(111, 11, '5CG884CE9', '2026-01-15', '2027-01-15', '2027-01-15', 'In Stock'),
+(112, 11, '5CGB58472', '2026-02-13', '2027-02-13', '2027-02-13', 'In Stock'),
+(121, 12, 'DL1056BF', '2026-01-22', '2028-01-22', '2028-01-22', 'In Stock'),
+(122, 12, 'DL398AA6', '2026-02-20', '2028-02-20', '2028-02-20', 'In Stock'),
+(123, 12, 'DL78E1DC', '2026-03-21', '2028-03-21', '2028-03-21', 'In Stock'),
+(131, 13, 'PF061084', '2026-01-29', '2029-01-29', '2029-01-29', 'In Stock'),
+(132, 13, 'PFDE4D75', '2026-02-27', '2029-02-27', '2029-02-27', 'In Stock'),
+(133, 13, 'PF7F07D7', '2026-03-28', '2029-03-28', '2029-03-28', 'In Stock'),
+(141, 14, 'ASN5E977A', '2026-02-05', '2028-02-05', '2028-02-05', 'In Stock'),
+(142, 14, 'ASN3BE1D7', '2026-03-06', '2028-03-06', '2028-03-06', 'In Stock'),
+(143, 14, 'ASNECA69E', '2026-04-04', '2028-04-04', '2028-04-04', 'In Stock'),
+(151, 15, '5CG93908D', '2026-02-12', '2029-02-12', '2029-02-12', 'In Stock'),
+(152, 15, '5CGA54D63', '2026-03-13', '2029-03-13', '2029-03-13', 'In Stock'),
+(153, 15, '5CG5CE936', '2026-04-11', '2029-04-11', '2029-04-11', 'In Stock'),
+(161, 16, 'DLD4953A', '2026-02-19', '2029-02-19', '2029-02-19', 'In Stock'),
+(162, 16, 'DLD33066', '2026-03-20', '2029-03-20', '2029-03-20', 'In Stock'),
+(163, 16, 'DL440FA8', '2026-04-18', '2029-04-18', '2029-04-18', 'In Stock'),
+(171, 17, 'PFDC6D38', '2026-02-26', '2027-02-26', '2027-02-26', 'In Stock'),
+(172, 17, 'PFA70311', '2026-03-27', '2027-03-27', '2027-03-27', 'In Stock'),
+(31, 3, 'FOCF9B1B7', '2025-11-20', '2028-11-20', '2028-11-20', 'In Stock'),
+(32, 3, 'FOCCAFF59', '2025-12-19', '2028-12-19', '2028-12-19', 'In Stock'),
+(33, 3, 'FOC484655', '2026-01-17', '2029-01-17', '2029-01-17', 'In Stock'),
+(261, 26, 'FOC7AB933', '2026-04-30', '2029-04-30', '2029-04-30', 'In Stock'),
+(262, 26, 'FOC8059F2', '2026-05-29', '2029-05-29', '2029-05-29', 'In Stock'),
+(263, 26, 'FOCB679C3', '2026-06-27', '2029-06-27', '2029-06-27', 'In Stock'),
+(311, 31, 'UBN5DF79D', '2026-06-04', '2028-06-04', '2028-06-04', 'In Stock'),
+(312, 31, 'UBNCECF70', '2026-07-03', '2028-07-03', '2028-07-03', 'In Stock'),
+(313, 31, 'UBN5C6A47', '2025-10-05', '2027-10-05', '2027-10-05', 'In Stock'),
+(341, 34, 'TPL535751', '2026-06-25', '2029-06-25', '2029-06-25', 'In Stock'),
+(342, 34, 'TPL53C441', '2026-07-24', '2029-07-24', '2029-07-24', 'In Stock'),
+(343, 34, 'TPL71C25F', '2025-10-26', '2028-10-26', '2028-10-26', 'In Stock')
+ON DUPLICATE KEY UPDATE `EquipmentID` = `EquipmentID`;  -- never touch an existing unit: the app marks sold units 'Sold'
 
 -- ===========================================================================
 -- 5. role — staff roles only.
@@ -460,10 +578,10 @@ CREATE TABLE `purchase_order` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO `purchase_order` (`PONo`, `VendorID`, `PODate`, `TotalAmount`, `Terms`) VALUES
-(9001, 1, '2024-01-05', 1200000.00, 'Net 30'),
-(9002, 2, '2024-01-10', 1080000.00, 'Net 15'),
-(9003, 3, '2024-01-20', 840000.00, 'Net 30'),
-(9004, 4, '2024-02-01', 450000.00, 'Immediate');
+(9001, 1, '2024-01-05', 880000.00, 'Net 30'),
+(9002, 2, '2024-01-10', 2100000.00, 'Net 15'),
+(9003, 3, '2024-01-20', 286000.00, 'Net 30'),
+(9004, 4, '2024-02-01', 370000.00, 'Immediate');
 
 -- ===========================================================================
 -- 17. po_item — one line of a purchase order (wholesale cost snapshot)
@@ -483,10 +601,10 @@ CREATE TABLE `po_item` (
 -- sample stock already reflects them, so each line is marked fully received.
 -- New purchase orders start at 0 and are received through the back office.
 INSERT INTO `po_item` (`POItemID`, `PONo`, `ProductID`, `Quantity`, `ReceivedQty`, `WholesaleUnitPrice`, `TotalPrice`) VALUES
-(1, 9001, 1, 10, 10, 120000.00, 1200000.00),
-(2, 9002, 2, 20, 20, 54000.00, 1080000.00),
-(3, 9003, 3, 10, 10, 84000.00, 840000.00),
-(4, 9004, 4, 50, 50, 9000.00, 450000.00);
+(1, 9001, 1, 10, 10, 88000.00, 880000.00),
+(2, 9002, 2, 20, 20, 105000.00, 2100000.00),
+(3, 9003, 3, 10, 10, 28600.00, 286000.00),
+(4, 9004, 4, 50, 50, 7400.00, 370000.00);
 
 -- ===========================================================================
 -- Keys and indexes

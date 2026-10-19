@@ -26,6 +26,7 @@
  *   payments_html   extra block below the table (receipts, attached units)
  *   extra_html      free-form block below the payments
  *   actions_html    buttons for the on-screen toolbar (hidden when printing)
+ *   download_href   "Download PDF" target    download_csv_href  "Download CSV"
  *   hint            muted text next to the toolbar buttons
  *   back_href       toolbar "back" link target      back_label  its text
  */
@@ -47,6 +48,16 @@ $docNoHtml = (string) ($doc_no ?? '');
             <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
                 <i class="fa-solid fa-print me-1"></i>Print
             </button>
+            <?php if (trim((string) ($download_href ?? '')) !== ''): ?>
+            <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars((string) $download_href) ?>">
+                <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
+            </a>
+            <?php endif; ?>
+            <?php if (trim((string) ($download_csv_href ?? '')) !== ''): ?>
+            <a class="btn btn-outline-secondary btn-sm" href="<?= htmlspecialchars((string) $download_csv_href) ?>">
+                <i class="fa-solid fa-file-csv me-1"></i>Download CSV
+            </a>
+            <?php endif; ?>
             <?= (string) ($actions_html ?? '') ?>
             <?php if (trim((string) ($hint ?? '')) !== ''): ?>
                 <span class="document-toolbar-hint text-muted small"><?= (string) $hint ?></span>

@@ -52,8 +52,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $contact    = trim($_POST['contact_name'] ?? '');
     $contactPh  = trim($_POST['contact_phone'] ?? '');
     $contactEm  = trim($_POST['contact_email'] ?? '');
-    $productIds = array_map('intval', $_POST['product_id'] ?? []);
-    $quantities = array_map('intval', $_POST['quantity'] ?? []);
+    // The line fields are posted as arrays (`product_id[]`). A hand-written or
+    // replayed POST can send a single scalar instead, so cast before walking it:
+    // otherwise array_map() throws and the public form answers with a fatal
+    // error instead of the validation message the sender deserves.
+    $productIds = array_map('intval', (array) ($_POST['product_id'] ?? []));
+    $quantities = array_map('intval', (array) ($_POST['quantity'] ?? []));
 
     keep_old(array_filter([
         'subject' => $subject, 'contact_name' => $contact,
@@ -107,6 +111,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $errors[] = 'Your account is a personal customer account — quotations are prepared for you directly, not filed under a SebaBD house branch. Please remove the branch from this request.';
             }
+        }
+
+        // If the storefront has been configured to let personal accounts request
+        // quotations, an individual files under their own client record (BranchID NULL).
+        // That path already has no branch, so a posted branch is ignored here the same
+        // way it is for the legacy house-guard above.
+        if ($branchId === 0 && is_individual_quotations_enabled()) {
+            $branchId = null;
         }
     }
 

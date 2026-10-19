@@ -228,6 +228,14 @@ $isInternal = ($order['OrderType'] ?? ORDER_TYPE_RETAIL) === ORDER_TYPE_INTERNAL
           <i class="fa-solid fa-sliders me-1"></i>Manage in the back office
         </a>
         <?php endif; ?>
+        <a class="btn btn-outline-secondary" href="download.php?doc=order&no=<?= $id ?>"
+           title="Download this order as a PDF">
+          <i class="fa-solid fa-file-pdf me-1"></i>Download PDF
+        </a>
+        <a class="btn btn-outline-secondary" href="download.php?doc=order&no=<?= $id ?>&format=csv"
+           title="Download this order as a CSV file">
+          <i class="fa-solid fa-file-csv me-1"></i>CSV
+        </a>
         <a class="btn btn-outline-secondary" href="dashboard.php">All my orders</a>
       </div>
     </div>
