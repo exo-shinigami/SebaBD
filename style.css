@@ -668,6 +668,40 @@ a {
     overflow-x: auto;
 }
 
+/* The two side-by-side report cards are narrower than the tables inside them,
+   so each table slides within its own card. Keeping the cells on one line stops
+   long product names wrapping into five-line rows that spilled past the card
+   edge, and the visible scrollbar makes the columns scrolled out of view
+   obvious instead of silently clipped. */
+.report-panel .report-panel-table th,
+.report-panel .report-panel-table td {
+    white-space: nowrap;
+}
+
+.report-panel .koolphp-table.table-responsive {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(28, 36, 48, 0.35) transparent;
+    padding-bottom: 0.35rem;
+}
+
+.report-panel .koolphp-table.table-responsive::-webkit-scrollbar {
+    height: 8px;
+}
+
+.report-panel .koolphp-table.table-responsive::-webkit-scrollbar-track {
+    background: rgba(28, 36, 48, 0.06);
+    border-radius: 999px;
+}
+
+.report-panel .koolphp-table.table-responsive::-webkit-scrollbar-thumb {
+    background: rgba(28, 36, 48, 0.3);
+    border-radius: 999px;
+}
+
+.report-panel .koolphp-table.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: rgba(28, 36, 48, 0.45);
+}
+
 /* Bootstrap's `.visually-hidden` is absolutely positioned, so inside a table
    that is wider than the phone it anchors to the *page* instead of the scroll
    box — the table clips the columns, but those 1px hidden labels still sat at

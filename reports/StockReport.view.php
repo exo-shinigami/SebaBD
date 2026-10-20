@@ -124,6 +124,7 @@ foreach ($rows as $row) {
             <?= report_panel_head('Serialized equipment register', 'Every tracked unit with its serial number and warranty cover (against today\'s date).') ?>
             <?php Table::create([
                 'dataStore' => $this->dataStore('instances'),
+                'responsive' => true,
                 'columns'   => [
                     'EquipmentID'  => ['label' => 'Unit #', 'type' => 'number'],
                     'SerialNumber' => ['label' => 'Serial number'],
@@ -150,7 +151,7 @@ foreach ($rows as $row) {
                         },
                     ],
                 ],
-                'cssClass' => ['table' => 'table table-hover align-middle mb-0', 'th' => 'report-th'],
+                'cssClass' => ['table' => 'table table-hover align-middle mb-0 report-panel-table', 'th' => 'report-th'],
             ]); ?>
         </section>
     </div>
@@ -159,6 +160,7 @@ foreach ($rows as $row) {
             <?= report_panel_head('Warranty cover per product', 'How many serialized units are still covered and how many have lapsed.') ?>
             <?php Table::create([
                 'dataStore' => $this->dataStore('warranty'),
+                'responsive' => true,
                 'columns'   => [
                     'Product'        => ['label' => 'Product'],
                     'Units'          => SebaBdReport::countColumn('Units', 'sum'),
@@ -169,7 +171,7 @@ foreach ($rows as $row) {
                     'EarliestExpiry' => ['label' => 'Earliest expiry'],
                 ],
                 'showFooter' => true,
-                'cssClass'   => ['table' => 'table table-hover align-middle mb-0', 'th' => 'report-th'],
+                'cssClass'   => ['table' => 'table table-hover align-middle mb-0 report-panel-table', 'th' => 'report-th'],
             ]); ?>
         </section>
     </div>

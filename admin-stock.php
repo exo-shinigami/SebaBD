@@ -285,7 +285,10 @@ if ($dbUp) {
                 (SELECT COUNT(*) FROM product_instance WHERE Status = 'Sold') AS UnitsSold,
                 (SELECT COUNT(*) FROM product_instance) AS UnitsTotal,
                 (SELECT COALESCE(SUM(StockQty), 0) FROM product WHERE IsSerialized = 0 AND StockQty <= 5) AS LowBulk,
-                (SELECT COUNT(*) FROM product WHERE IsSerialized = 1) AS SerializedProducts"
+                (SELECT COUNT(*) FROM product WHERE IsSerialized = 1) AS SerializedProducts,
+                (SELECT COUNT(*) FROM product_instance WHERE ClientWarrantyExpiry >= CURDATE()) AS WarrantyCovered,
+                (SELECT COUNT(*) FROM product_instance WHERE ClientWarrantyExpiry IS NULL
+                    OR ClientWarrantyExpiry < CURDATE()) AS WarrantyLapsed"
     );
     $summary = $summary[0] ?? [];
 }
@@ -322,6 +325,8 @@ echo admin_lead(
     <?= report_kpi('Serialized units', number_format((int) ($summary['UnitsInStock'] ?? 0)), 'In stock of ' . number_format((int) ($summary['UnitsTotal'] ?? 0)) . ' recorded', 'fa-barcode') ?>
     <?= report_kpi('Units sold', number_format((int) ($summary['UnitsSold'] ?? 0)), 'Marked Sold on a device record', 'fa-truck-fast') ?>
     <?= report_kpi('Lines to watch', number_format((int) ($summary['LowBulk'] ?? 0)), 'Bulk quantity of five or fewer', 'fa-triangle-exclamation') ?>
+    <?= report_kpi('Warranty covered', number_format((int) ($summary['WarrantyCovered'] ?? 0)), 'Serialized units with current client warranty', 'fa-shield-check') ?>
+    <?= report_kpi('Warranty lapsed', number_format((int) ($summary['WarrantyLapsed'] ?? 0)), 'Serialized units with expired or missing client warranty', 'fa-shield-exclamation') ?>
   </div>
 
   <div class="ajax-errors" data-ajax-errors>
@@ -418,10 +423,10 @@ echo admin_lead(
           'rows'        => array_map(function ($unit) {
               $clientDays = days_from_today($unit['ClientWarrantyExpiry']);
               $warranty   = format_date($unit['ClientWarrantyExpiry']);
-              if ($clientDays !== null && $clientDays >= 0 && $unit['ClientWarrantyExpiry']) {
-                  $warranty .= '<small class="d-block text-muted">' . $clientDays . ' days left</small>';
-              } elseif ($clientDays !== null && $unit['ClientWarrantyExpiry']) {
-                  $warranty .= '<small class="d-block text-muted">expired</small>';
+              if ($unit['ClientWarrantyExpiry'] && $clientDays !== null) {
+                  $warranty .= '<small class="d-block text-muted">'
+                      . ($clientDays >= 0 ? $clientDays . ' days left' : 'expired')
+                      . '</small>';
               }
 
               return [
