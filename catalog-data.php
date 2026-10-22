@@ -20,48 +20,33 @@ if (!function_exists('db_fetch_all')) {
 }
 
 /**
- * Per-product presentation extras, keyed by ProductID: a photo, a corner
- * badge, hand-written copy and a "was" price for the deals pages.
+ * Per-product presentation extras, keyed by ProductID: a corner badge,
+ * hand-written copy and a "was" price for the deals pages.
  *
  * The database stays the single source of truth for what exists, what it costs
  * and how many are on hand; this map only decorates what it returns. A product
- * with no entry here still renders: product_presentation() gives it its
- * category photo and a description built from the row itself.
- *
- * Images are local files under images/products/ so the storefront never
- * depends on an external host:
- *   - laptop/monitor/mouse/switch → product photos from the sebabd.com catalog
- *   - the .svg tiles            → flat category illustrations drawn for this
- *                                 site, used when no photo fits the item
- * Drop a replacement file in images/products/ and update the path here.
+ * with no entry here still renders: product_presentation() gives it a photo
+ * from product_images() and a description built from the row itself.
  */
 function product_meta(): array
 {
     return [
         1 => [
-            'image' => 'images/products/laptop.jpg',
-            'alt'   => 'HP ProBook 450 G10 business laptop',
             'badge' => 'Hot',
             'blurb' => 'HP ProBook 450 G10 business notebook (Core i5, 16 GB) — 24-month warranty tracked per serial number.',
             'sale'  => 108000.00,
         ],
         2 => [
-            'image' => 'images/products/monitor.jpg',
-            'alt'   => 'Dell UltraSharp 27-inch 4K monitor',
             'badge' => 'Deal',
             'blurb' => 'Dell UltraSharp 4K IPS panel (U2723QE) with USB-C docking and factory colour calibration — 36-month warranty.',
             'sale'  => 138000.00,
         ],
         3 => [
-            'image' => 'images/products/switch.jpg',
-            'alt'   => 'Cisco 24-port managed network switch',
             'badge' => 'Hot',
             'blurb' => 'Cisco CBS350-24T 24-port managed gigabit switch — 36-month manufacturer warranty tracked per serial number.',
             'sale'  => null,
         ],
         4 => [
-            'image' => 'images/products/mouse.png',
-            'alt'   => 'Logitech MX Master 3S wireless mouse',
             'badge' => 'Deal',
             'blurb' => 'Logitech MX Master 3S wireless mouse — quiet clicks, 8,000 DPI tracking and multi-device switching.',
             'sale'  => 11000.00,
@@ -90,21 +75,21 @@ function product_meta(): array
 }
 
 /**
- * The photo a product falls back to when product_meta() names none: its
+ * The photo a product falls back to when product_images() names none: its
  * category, with a couple of name-level exceptions so a battery backup is not
  * illustrated with a mouse.
  */
 function category_image(string $categoryName, string $productName = ''): string
 {
     $byName = [
-        'UPS'      => 'images/products/power.svg',
-        'AVR'      => 'images/products/power.svg',
-        'Camera'   => 'images/products/cctv.svg',
-        'Keyboard' => 'images/products/peripherals.svg',
-        'Headset'  => 'images/products/peripherals.svg',
-        'Webcam'   => 'images/products/peripherals.svg',
-        'Hub'      => 'images/products/peripherals.svg',
-        'Cable'    => 'images/products/peripherals.svg',
+        'UPS'      => 'images/products/accessories/walton-600va-ups.jpg',
+        'AVR'      => 'images/products/accessories/walton-600va-ups.jpg',
+        'Camera'   => 'images/products/accessories/hikvision-2mp-dome-camera-ds-2ce56d0t.jpg',
+        'Keyboard' => 'images/products/accessories/logitech-k380-multi-device-keyboard.jpg',
+        'Headset'  => 'images/products/accessories/logitech-h340-usb-headset.jpg',
+        'Webcam'   => 'images/products/accessories/logitech-c270-hd-webcam.jpg',
+        'Hub'      => 'images/products/accessories/anker-5-in-1-usb-c-hub-a8346.jpg',
+        'Cable'    => 'images/products/accessories/ugreen-usb-c-to-hdmi-cable-1-5m-cm315.jpg',
     ];
     foreach ($byName as $needle => $image) {
         if ($productName !== '' && mb_stripos($productName, $needle) !== false) {
@@ -113,12 +98,12 @@ function category_image(string $categoryName, string $productName = ''): string
     }
 
     $byCategory = [
-        'Laptops & Computers'  => 'images/products/laptop.jpg',
-        'Monitors & Displays'  => 'images/products/monitor.jpg',
-        'Networking Equipment' => 'images/products/switch.jpg',
-        'Accessories'          => 'images/products/mouse.png',
-        'Printers & Scanners'  => 'images/products/printer.svg',
-        'Storage & Components' => 'images/products/storage.svg',
+        'Laptops & Computers'  => 'images/products/laptops/hp-probook-450-g10.jpg',
+        'Monitors & Displays'  => 'images/products/monitors/dell-ultrasharp-27-4k-monitor-u2723qe.jpg',
+        'Networking Equipment' => 'images/products/networking/tp-link-archer-c6-ac1200-router.jpg',
+        'Accessories'          => 'images/products/accessories/logitech-mx-master-3s-wireless-mouse.jpg',
+        'Printers & Scanners'  => 'images/products/printers/hp-laserjet-pro-m404dn-printer.jpg',
+        'Storage & Components' => 'images/products/storage/samsung-980-500gb-nvme-ssd-mz-v8v500.jpg',
     ];
 
     return $byCategory[$categoryName] ?? '';
@@ -197,6 +182,83 @@ function product_blurb(array $row): string
 }
 
 /**
+ * The photo of every catalogue item, keyed by ProductID.
+ *
+ * Files sit in one folder per category — laptops/, monitors/, networking/,
+ * accessories/, printers/, storage/ — and are named after the product itself
+ * (brand plus model), e.g. images/products/laptops/hp-probook-450-g10.jpg.
+ * Every file is a 900×900 JPEG on a white canvas, so cards, the detail page
+ * and the cart thumbnails all crop the same way and no photo looks out of
+ * place next to its neighbours.
+ *
+ * A product created in the back office has no entry here until someone adds a
+ * photo for it; the storefront then falls back to its category photo rather
+ * than showing a broken image. To change a picture, drop the replacement in
+ * the product's category folder and point this map at it.
+ */
+function product_images(): array
+{
+    return [
+        1 => ['image' => 'images/products/laptops/hp-probook-450-g10.jpg', 'alt' => 'HP ProBook 450 G10'],
+        2 => ['image' => 'images/products/monitors/dell-ultrasharp-27-4k-monitor-u2723qe.jpg', 'alt' => 'Dell UltraSharp 27" 4K Monitor (U2723QE)'],
+        3 => ['image' => 'images/products/networking/cisco-cbs350-24t-24-port-managed-switch.jpg', 'alt' => 'Cisco CBS350-24T 24-Port Managed Switch'],
+        4 => ['image' => 'images/products/accessories/logitech-mx-master-3s-wireless-mouse.jpg', 'alt' => 'Logitech MX Master 3S Wireless Mouse'],
+        5 => ['image' => 'images/products/laptops/hp-250-g9.jpg', 'alt' => 'HP 250 G9'],
+        6 => ['image' => 'images/products/laptops/dell-inspiron-15-3530.jpg', 'alt' => 'Dell Inspiron 15 3530'],
+        7 => ['image' => 'images/products/laptops/lenovo-ideapad-slim-3-15irh10.jpg', 'alt' => 'Lenovo IdeaPad Slim 3 (15IRH10)'],
+        8 => ['image' => 'images/products/laptops/asus-vivobook-15-x1504za.jpg', 'alt' => 'Asus VivoBook 15 (X1504ZA)'],
+        9 => ['image' => 'images/products/laptops/acer-aspire-5-a515-56g.jpg', 'alt' => 'Acer Aspire 5 (A515-56G)'],
+        10 => ['image' => 'images/products/laptops/apple-macbook-air-m2-13-m2-8gb-256gb.jpg', 'alt' => 'Apple MacBook Air M2 13" (M2 8GB/256GB)'],
+        11 => ['image' => 'images/products/laptops/hp-15s-fd0841tu.jpg', 'alt' => 'HP 15s fd0841TU (15s-fd0841TU)'],
+        12 => ['image' => 'images/products/laptops/dell-vostro-3520.jpg', 'alt' => 'Dell Vostro 3520'],
+        13 => ['image' => 'images/products/laptops/lenovo-thinkpad-e14-gen-5.jpg', 'alt' => 'Lenovo ThinkPad E14 Gen 5'],
+        14 => ['image' => 'images/products/laptops/asus-tuf-gaming-f15-fx506hf.jpg', 'alt' => 'Asus TUF Gaming F15 (FX506HF)'],
+        15 => ['image' => 'images/products/laptops/hp-elitebook-640-g9.jpg', 'alt' => 'HP EliteBook 640 G9'],
+        16 => ['image' => 'images/products/laptops/dell-latitude-3440.jpg', 'alt' => 'Dell Latitude 3440'],
+        17 => ['image' => 'images/products/laptops/lenovo-v15-g4-iru.jpg', 'alt' => 'Lenovo V15 G4 IRU'],
+        18 => ['image' => 'images/products/monitors/dell-s2421hn-24-ips-monitor.jpg', 'alt' => 'Dell S2421HN 24" IPS Monitor'],
+        19 => ['image' => 'images/products/monitors/hp-m22f-21-5-fhd-monitor.jpg', 'alt' => 'HP M22f 21.5" FHD Monitor'],
+        20 => ['image' => 'images/products/monitors/samsung-ls24c310-24-fhd-monitor.jpg', 'alt' => 'Samsung LS24C310 24" FHD Monitor'],
+        21 => ['image' => 'images/products/monitors/lg-27up600-w-27-4k-monitor.jpg', 'alt' => 'LG 27UP600-W 27" 4K Monitor'],
+        22 => ['image' => 'images/products/monitors/xiaomi-redmi-rmmnt215nf-monitor.jpg', 'alt' => 'Xiaomi Redmi RMMNT215NF Monitor'],
+        23 => ['image' => 'images/products/monitors/benq-gw2480-24-ips-monitor.jpg', 'alt' => 'BenQ GW2480 24" IPS Monitor'],
+        24 => ['image' => 'images/products/monitors/asus-va24ehe-24-fhd-monitor.jpg', 'alt' => 'Asus VA24EHE 24" FHD Monitor'],
+        25 => ['image' => 'images/products/monitors/hp-v22v-21-5-monitor.jpg', 'alt' => 'HP V22v 21.5" Monitor'],
+        26 => ['image' => 'images/products/networking/cisco-cbs350-8t-8-port-managed-switch.jpg', 'alt' => 'Cisco CBS350-8T 8-Port Managed Switch'],
+        27 => ['image' => 'images/products/networking/tp-link-archer-c6-ac1200-router.jpg', 'alt' => 'TP-Link Archer C6 AC1200 Router'],
+        28 => ['image' => 'images/products/networking/tp-link-tl-sg108-8-port-gigabit-switch.jpg', 'alt' => 'TP-Link TL-SG108 8-Port Gigabit Switch'],
+        29 => ['image' => 'images/products/networking/d-link-dir-825-ac1200-router.jpg', 'alt' => 'D-Link DIR-825 AC1200 Router'],
+        30 => ['image' => 'images/products/networking/mikrotik-hex-s-rb760igs-router.jpg', 'alt' => 'MikroTik hEX S RB760iGS Router'],
+        31 => ['image' => 'images/products/networking/ubiquiti-unifi-u6-access-point.jpg', 'alt' => 'Ubiquiti UniFi U6+ Access Point'],
+        32 => ['image' => 'images/products/networking/tp-link-tl-wa855re-range-extender.jpg', 'alt' => 'TP-Link TL-WA855RE Range Extender'],
+        33 => ['image' => 'images/products/networking/netgear-gs308-8-port-gigabit-switch.jpg', 'alt' => 'Netgear GS308 8-Port Gigabit Switch'],
+        34 => ['image' => 'images/products/networking/tp-link-omada-eap225-access-point.jpg', 'alt' => 'TP-Link Omada EAP225 Access Point'],
+        35 => ['image' => 'images/products/accessories/logitech-k380-multi-device-keyboard.jpg', 'alt' => 'Logitech K380 Multi-Device Keyboard'],
+        36 => ['image' => 'images/products/accessories/a4tech-op-620d-wired-mouse.jpg', 'alt' => 'A4Tech OP-620D Wired Mouse'],
+        37 => ['image' => 'images/products/accessories/dell-kb216-wired-keyboard.jpg', 'alt' => 'Dell KB216 Wired Keyboard'],
+        38 => ['image' => 'images/products/accessories/anker-5-in-1-usb-c-hub-a8346.jpg', 'alt' => 'Anker 5-in-1 USB-C Hub (A8346)'],
+        39 => ['image' => 'images/products/accessories/ugreen-usb-c-to-hdmi-cable-1-5m-cm315.jpg', 'alt' => 'UGREEN USB-C to HDMI Cable 1.5m (CM315)'],
+        40 => ['image' => 'images/products/accessories/logitech-c270-hd-webcam.jpg', 'alt' => 'Logitech C270 HD Webcam'],
+        41 => ['image' => 'images/products/accessories/logitech-h340-usb-headset.jpg', 'alt' => 'Logitech H340 USB Headset'],
+        42 => ['image' => 'images/products/accessories/walton-600va-ups.jpg', 'alt' => 'Walton 600VA UPS'],
+        43 => ['image' => 'images/products/accessories/hikvision-2mp-dome-camera-ds-2ce56d0t.jpg', 'alt' => 'Hikvision 2MP Dome Camera (DS-2CE56D0T)'],
+        45 => ['image' => 'images/products/printers/hp-laserjet-pro-m404dn-printer.jpg', 'alt' => 'HP LaserJet Pro M404dn Printer'],
+        46 => ['image' => 'images/products/printers/epson-ecotank-l3250-all-in-one.jpg', 'alt' => 'Epson EcoTank L3250 All-in-One'],
+        47 => ['image' => 'images/products/printers/canon-pixma-g2010-all-in-one.jpg', 'alt' => 'Canon PIXMA G2010 All-in-One'],
+        48 => ['image' => 'images/products/printers/hp-laserjet-m111a-printer.jpg', 'alt' => 'HP LaserJet M111a Printer'],
+        49 => ['image' => 'images/products/printers/epson-ecotank-l3210-all-in-one.jpg', 'alt' => 'Epson EcoTank L3210 All-in-One'],
+        50 => ['image' => 'images/products/printers/canon-pixma-g3010-all-in-one.jpg', 'alt' => 'Canon PIXMA G3010 All-in-One'],
+        51 => ['image' => 'images/products/storage/samsung-980-500gb-nvme-ssd-mz-v8v500.jpg', 'alt' => 'Samsung 980 500GB NVMe SSD (MZ-V8V500)'],
+        52 => ['image' => 'images/products/storage/kingston-a400-480gb-sata-ssd-sa400s37.jpg', 'alt' => 'Kingston A400 480GB SATA SSD (SA400S37)'],
+        53 => ['image' => 'images/products/storage/seagate-barracuda-1tb-hdd-st1000dm010.jpg', 'alt' => 'Seagate Barracuda 1TB HDD (ST1000DM010)'],
+        54 => ['image' => 'images/products/storage/wd-green-240gb-sata-ssd-wds240g3g0a.jpg', 'alt' => 'WD Green 240GB SATA SSD (WDS240G3G0A)'],
+        55 => ['image' => 'images/products/storage/kingston-fury-8gb-ddr4-3200mhz-kf432c16bb-8.jpg', 'alt' => 'Kingston FURY 8GB DDR4 3200MHz (KF432C16BB/8)'],
+        56 => ['image' => 'images/products/storage/samsung-980-pro-1tb-nvme-ssd-mz-v8p1t0.jpg', 'alt' => 'Samsung 980 PRO 1TB NVMe SSD (MZ-V8P1T0)'],
+        57 => ['image' => 'images/products/storage/seagate-barracuda-2tb-hdd-st2000dm008.jpg', 'alt' => 'Seagate Barracuda 2TB HDD (ST2000DM008)'],
+    ];
+}
+
+/**
  * The row a storefront card renders from: the database columns, the
  * hand-written extras from product_meta(), and the derived photo/description
  * for anything left over.
@@ -215,6 +277,7 @@ function product_presentation(array $row): array
             'sale'  => null,
         ],
         $row,
+        product_images()[$id] ?? [],
         product_meta()[$id] ?? []
     );
 }

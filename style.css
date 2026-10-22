@@ -161,11 +161,16 @@ a {
     box-shadow: 0 24px 50px rgba(16, 24, 32, 0.12);
 }
 
+/* Product photos are square cut-outs on a white canvas, so they are fitted
+   inside the tile rather than cropped: a tall monitor or a small SSD is shown
+   whole at every card size. */
 .product-image {
     width: 100%;
     height: 230px;
-    object-fit: cover;
-    background: var(--surface-soft);
+    object-fit: contain;
+    padding: 0.5rem;
+    background: #fff;
+    border-bottom: 1px solid rgba(28, 36, 48, 0.06);
 }
 
 /* Products created in the back office have no photo file mapped to them yet.
@@ -199,8 +204,12 @@ a {
     display: block;
     width: 100%;
     min-height: 18rem;
+    max-height: 30rem;
+    padding: 0.75rem;
+    border: 1px solid rgba(28, 36, 48, 0.07);
     border-radius: 0.75rem;
-    object-fit: cover;
+    background: #fff;
+    object-fit: contain;
 }
 
 .price {
@@ -1089,6 +1098,26 @@ form.is-busy button[type="submit"]::after {
 .admin-line-total {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+/* The product photo in the back-office catalog list. Same square and white
+   canvas as the storefront tiles, just small enough for a table row. */
+.admin-list-photo {
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.45rem;
+    background: #fff;
+    object-fit: contain;
+}
+
+.admin-list-photo-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-strong);
+    background: var(--surface-soft);
 }
 
 .admin-muted-row td {

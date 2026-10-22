@@ -15,6 +15,9 @@
  * is managed in admin-stock.php, where each unit is a row of its own.
  */
 require_once __DIR__ . '/admin-bootstrap.php';
+// The list shows each product's photo, so it needs the catalog presentation
+// layer (product_images(), category_icon()) as well as the back-office chrome.
+require_once __DIR__ . '/catalog-data.php';
 
 $user   = require_module('admin-products.php');
 $dbUp   = db() !== null;
@@ -321,14 +324,26 @@ echo admin_lead('Products', 'The sellable catalog. Each product has exactly one 
       'rows'        => array_map(function ($row) {
           $serialized = ((int) $row['IsSerialized']) === 1;
           $onHand     = $serialized ? (int) $row['UnitsInStock'] : (int) $row['StockQty'];
+          $photo      = product_presentation($row);
+          $photoSrc   = trim((string) ($photo['image'] ?? ''));
+
+          // The same photo the storefront shows, at list size, so staff can
+          // recognise an item without reading every name. A product with no
+          // photo file gets its category icon in the same square.
+          $thumb = $photoSrc !== ''
+              ? '<img class="admin-list-photo" src="' . htmlspecialchars($photoSrc) . '" alt="'
+                  . htmlspecialchars((string) ($photo['alt'] ?? $row['ProductName'])) . '" loading="lazy">'
+              : '<span class="admin-list-photo admin-list-photo-fallback"><i class="'
+                  . htmlspecialchars(category_icon((string) $row['CategoryName'])) . '"></i></span>';
 
           return [
               '<span class="text-muted">' . (int) $row['ProductID'] . '</span>',
-              '<a class="fw-semibold text-decoration-none" href="admin-products.php?action=edit&id=' . (int) $row['ProductID'] . '">'
+              '<div class="d-flex align-items-center gap-2">' . $thumb
+                  . '<div><a class="fw-semibold text-decoration-none" href="admin-products.php?action=edit&id=' . (int) $row['ProductID'] . '">'
                   . htmlspecialchars($row['ProductName']) . '</a>'
                   . '<small class="d-block text-muted">'
                   . htmlspecialchars(trim(($row['Brand'] ?? '') . ($row['Model'] ? ' · ' . $row['Model'] : '')) ?: '—')
-                  . '</small>',
+                  . '</small></div></div>',
               htmlspecialchars($row['CategoryName']),
               htmlspecialchars($row['VendorName']),
               '<span class="admin-line-total">' . money($row['StandardPrice']) . '</span>',

@@ -25,8 +25,9 @@ $user = current_user();
      <!-- font awesome link  -->
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.3.0/css/all.min.css" integrity="sha512-ApSLB1Pd3/bZN8fWB/RG9YhN/7bd9Hkf3AGaE2mPfebjrxagjuBtx2GcgdqIlJkUzwylBo61r9Xa9NmgBI0swA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-      <!-- CSS File -->
-       <link rel="stylesheet" href="style.css">
+      <!-- CSS File. The version stamp is the file's mtime, so a changed
+           stylesheet is fetched instead of the week-old cached copy. -->
+       <link rel="stylesheet" href="style.css?v=<?= (int) @filemtime(dirname(__DIR__) . '/style.css') ?>">
        <?php if (basename($_SERVER['SCRIPT_NAME']) === 'diagnostic.php'): ?>
        <link rel="stylesheet" href="assets/diagnostic.css">
        <?php endif; ?>

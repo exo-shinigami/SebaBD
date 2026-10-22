@@ -932,7 +932,7 @@ Staff modules, one entity per page, each handling its whole lifecycle through `?
 | `partials/product-card.php` | One product card (used by the grid and by related products) |
 | `style.css` | The single stylesheet, including dashboard and product-detail components |
 | `assets/ajax.js` | AJAX form submits, live search suggestions, per-line stock notes, account checks |
-| `images/products/*.svg` | Flat illustrations for the categories with no photograph (printers, storage, power, CCTV, desk peripherals) |
+| `images/products/<category>/` | One folder per category (`laptops/`, `monitors/`, `networking/`, `accessories/`, `printers/`, `storage/`) holding a 900×900 photo per product, named after the item (e.g. `hp-probook-450-g10.jpg`) |
 | `assets/form-items.js` | Dynamic product rows and live line/grand totals |
 | `api/` | Read-only JSON endpoints (`products.php`, `stock.php`, `check-account.php`) |
 
@@ -1129,15 +1129,17 @@ There is no build step. The interface is PHP templates plus `style.css`.
 | Product cards (grid and related products) | `partials/product-card.php` |
 | Product detail layout | `product.php` |
 | Dashboard panels and queries | `dashboard.php` |
-| Product photos, badges, blurbs, deal prices | `catalog-data.php` → `product_meta()`, keyed by `ProductID` |
+| Product photos | `catalog-data.php` → `product_images()`, keyed by `ProductID` |
+| Badges, blurbs, deal prices | `catalog-data.php` → `product_meta()`, keyed by `ProductID` |
 | Form fields and server-side rules | the form's own page (`login.php`, `order.php`, …) — keep field names such as `product_id[]`, `quantity[]`, `shipping_address` |
 | Interactive behaviour | `assets/ajax.js` (forms, search, filtering, stock) and `assets/form-items.js` (line items, totals) |
 
 Presentation data that is *not* part of the schema (photo file, marketing blurb, badge, "was"
 price) lives in `catalog-data.php`; the database remains the source of truth for names, prices,
 stock and categories. To add a product: insert the `product` row (and its `category`/`vendor`
-rows if new), add an entry to `product_meta()`, drop the photo in `images/products/`, and
-decide whether it is serialized (`product_instance` rows) or quantity-tracked (`StockQty`).
+rows if new), register its photo in `product_images()` with the file dropped in the matching
+category folder under `images/products/`, and decide whether it is serialized (`product_instance`
+rows) or quantity-tracked (`StockQty`).
 
 ---
 
@@ -1177,7 +1179,7 @@ debug output, enable HTTPS, configure secure session cookies and replace the sam
 | Need connection details or an insert test | `diagnostic.php` — served only to the machine running the site (`127.0.0.1` / `::1`) or to a signed-in Admin; everyone else gets a 404 |
 | Sample login fails | The sample database was imported (`database/e_commerce.sql`) so the accounts exist; compare the username/password with the **Sample logins** table above |
 | Styles or icons missing | Page served over HTTP (not `file://`); internet access for the CDNs |
-| Product images missing | Paths in `product_meta()` and files under `images/products/` (case-sensitive on many servers) |
+| Product images missing | Paths in `product_images()` and files under `images/products/<category>/` (case-sensitive on many servers) |
 | Dashboard shows zeros | The tables really are empty — import the sample dump, or check the MySQL user's read access |
 | Reports show no charts | Staff account required, database online, Google Charts reachable |
 | A form works without JavaScript but not with it | Browser console and Network panel; the form must keep `data-ajax` and return JSON for `X-Requested-With: fetch` |
