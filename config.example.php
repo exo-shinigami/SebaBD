@@ -92,4 +92,14 @@ return [
      * record (BranchID NULL), without any company or branch being created for them.
      */
     'allow_individual_quotations' => false,
+
+    /**
+     * Customer payment options and instructions shown at checkout.
+     * Edit these numbers and details for your live accounts.
+     */
+    'payments' => [
+        'bkash_number' => '01711-000000 (Merchant)',
+        'nagad_number' => '01811-000000 (Merchant)',
+        'bank_details' => 'SebaBD Ltd, A/C: 108.110.12345, Dutch-Bangla Bank (Banani Branch)',
+    ],
 ];

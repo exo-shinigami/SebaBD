@@ -105,6 +105,7 @@ if ($dbUp) {
     if ($action === 'view') {
         $found = db_fetch_all(
             'SELECT o.OrderID, o.UserID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType,
+                    o.PaymentMethod, o.PaymentReference,
                     o.BranchID, o.ShippingAddress,
                     u.FullName, u.Username, u.Email, u.Phone,
                     c.ClientID, c.CompanyName,
@@ -170,7 +171,7 @@ if ($dbUp) {
     $orderPage = paginate((int) ($countRow[0]['n'] ?? 0), 20);
 
     $rows = db_fetch_all(
-        'SELECT o.OrderID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType, o.BranchID, o.ShippingAddress,
+        'SELECT o.OrderID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType, o.PaymentMethod, o.PaymentReference, o.BranchID, o.ShippingAddress,
                 u.UserID, u.FullName, u.Username, c.ClientID, c.CompanyName,
                 (SELECT COUNT(*) FROM order_item oi WHERE oi.OrderID = o.OrderID) AS Items,
                 (SELECT i.InvoiceNo FROM invoice i WHERE i.OrderID = o.OrderID) AS InvoiceNo'
@@ -295,7 +296,10 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
                   . ($row['CompanyName'] !== null ? ' · ' . htmlspecialchars($row['CompanyName']) : '') . '</small>',
               '<span class="small">' . htmlspecialchars((string) ($row['ShippingAddress'] ?? '—')) . '</span>',
               (int) $row['Items'],
-              '<span class="admin-line-total">' . money($row['TotalAmount']) . '</span>',
+              '<span class="admin-line-total">' . money($row['TotalAmount']) . '</span>'
+                  . '<small class="d-block mt-1">' . payment_method_badge((string) ($row['PaymentMethod'] ?? 'Cash on Delivery'))
+                  . (!empty($row['PaymentReference']) ? '<code class="d-block mt-1 text-dark">' . htmlspecialchars((string) $row['PaymentReference']) . '</code>' : '')
+                  . '</small>',
               status_badge((string) $row['OrderStatus'])
                   . ($row['InvoiceNo'] !== null
                       ? '<small class="d-block text-muted">invoiced #' . (int) $row['InvoiceNo'] . '</small>'
@@ -412,6 +416,20 @@ echo admin_lead('Orders', 'Every order placed on the storefront, with its lines,
           </div>
           <button class="btn btn-accent w-100" type="submit"><i class="fa-solid fa-arrows-rotate me-1"></i>Update status</button>
         </form>
+      </div>
+
+      <div class="report-panel">
+        <div class="report-panel-head">
+          <h2 class="report-panel-title">Payment</h2>
+        </div>
+        <?= admin_detail_row('Method', payment_method_badge((string) ($order['PaymentMethod'] ?? 'Cash on Delivery'))) ?>
+        <?php if (!empty($order['PaymentReference'])): ?>
+        <?= admin_detail_row('Reference / TrxID', '<span class="font-monospace fw-semibold fs-6 text-dark">'
+            . htmlspecialchars((string) $order['PaymentReference']) . '</span>') ?>
+        <?php endif; ?>
+        <?= admin_detail_row('Instructions', ($order['PaymentMethod'] ?? '') === 'Cash on Delivery'
+            ? '<span class="text-muted small">Collect cash upon delivery.</span>'
+            : '<span class="text-muted small">Verify reference with your merchant app/statement.</span>') ?>
       </div>
 
       <div class="report-panel">

@@ -462,6 +462,7 @@ function download_order(int $no, array $user): ?array
 {
     $rows = db_fetch_all(
         'SELECT o.OrderID, o.UserID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType,
+                o.PaymentMethod, o.PaymentReference,
                 o.BranchID, o.ShippingAddress,
                 b.BranchName, u.FullName, u.Email, u.Phone, u.Username
          FROM `order` o
@@ -564,6 +565,7 @@ function download_order(int $no, array $user): ?array
             ['label' => 'Customer', 'value' => (string) $order['FullName']],
             ['label' => 'Account', 'value' => (string) $order['Username']],
             ['label' => 'Channel', 'value' => $isInternal ? 'Internal (SebaBD\'s own purchase)' : 'Customer order'],
+            ['label' => 'Payment', 'value' => (string) ($order['PaymentMethod'] ?? 'Cash on Delivery') . (!empty($order['PaymentReference']) ? ' (Ref: ' . $order['PaymentReference'] . ')' : '')],
             ['label' => 'Status', 'value' => (string) $order['OrderStatus']],
             ['label' => 'Lines', 'value' => count($items) . ' product' . (count($items) === 1 ? '' : 's')],
         ],

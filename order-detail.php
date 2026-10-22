@@ -24,6 +24,7 @@ $justPlaced = isset($_GET['placed']);
 
 $rows = db_fetch_all(
     'SELECT o.OrderID, o.UserID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType,
+            o.PaymentMethod, o.PaymentReference,
             o.BranchID, o.ShippingAddress,
             b.BranchName, u.FullName, u.Email, u.Phone, u.Username
      FROM `order` o
@@ -188,6 +189,7 @@ $isInternal = ($order['OrderType'] ?? ORDER_TYPE_RETAIL) === ORDER_TYPE_INTERNAL
         <p class="section-label mb-1">Order</p>
         <h1 class="h3 fw-bold mb-1">#<?= $id ?>
           <?= status_badge($status) ?>
+          <?= payment_method_badge((string) ($order['PaymentMethod'] ?? 'Cash on Delivery')) ?>
         </h1>
         <p class="text-muted mb-0">
           Placed <?= htmlspecialchars(format_date($order['OrderDate'], 'd M Y, H:i')) ?>
@@ -355,6 +357,37 @@ $isInternal = ($order['OrderType'] ?? ORDER_TYPE_RETAIL) === ORDER_TYPE_INTERNAL
             invoice against it — it will appear here, with the serial numbers of any serialized units.
           </p>
           <?php endif; ?>
+        </div>
+
+        <div class="report-panel mb-4">
+          <div class="report-panel-head">
+            <h2 class="report-panel-title">Payment details</h2>
+            <p class="report-panel-sub">Selected at checkout.</p>
+          </div>
+          <table class="table table-sm mb-0">
+            <tbody>
+              <tr>
+                <th scope="row" class="text-muted fw-normal">Method</th>
+                <td class="text-end"><?= payment_method_badge((string) ($order['PaymentMethod'] ?? 'Cash on Delivery')) ?></td>
+              </tr>
+              <?php if (!empty($order['PaymentReference'])): ?>
+              <tr>
+                <th scope="row" class="text-muted fw-normal">Reference / TrxID</th>
+                <td class="text-end font-monospace fw-semibold"><?= htmlspecialchars((string) $order['PaymentReference']) ?></td>
+              </tr>
+              <?php endif; ?>
+              <tr>
+                <th scope="row" class="text-muted fw-normal">Terms</th>
+                <td class="text-end small text-muted">
+                  <?php if (($order['PaymentMethod'] ?? '') === 'Cash on Delivery'): ?>
+                    Payable in cash on delivery
+                  <?php else: ?>
+                    Reference recorded for verification
+                  <?php endif; ?>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="report-panel">

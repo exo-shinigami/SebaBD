@@ -25,15 +25,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $shipping   = trim($_POST['shipping_address'] ?? '');
     $productIds = array_map('intval', $_POST['product_id'] ?? []);
     $quantities = array_map('intval', $_POST['quantity'] ?? []);
+    $paymentMethod = post_str('payment_method', 'Cash on Delivery');
+    $paymentRef    = trim((string) post_str('payment_reference'));
+
+    $availableMethods = checkout_payment_methods();
+    if (!isset($availableMethods[$paymentMethod])) {
+        $paymentMethod = 'Cash on Delivery';
+    }
+    $selectedPaymentInfo = $availableMethods[$paymentMethod];
 
     keep_old([
         'shipping_address' => $shipping,
         'product_id'       => $productIds,
-        'quantity'         => $quantities,
+        'quantity'          => $quantities,
+        'payment_method'    => $paymentMethod,
+        'payment_reference' => $paymentRef,
     ]);
 
     if (mb_strlen($shipping) < 10) {
         $errors[] = 'Please enter a full delivery address (street, area, city).';
+    }
+    if ($selectedPaymentInfo['requires_ref'] && $paymentRef === '') {
+        $errors[] = 'Please enter your ' . $selectedPaymentInfo['ref_label'] . ' for ' . $paymentMethod . ' payment.';
+    } elseif ($selectedPaymentInfo['requires_ref'] && mb_strlen($paymentRef) > 100) {
+        $errors[] = 'The payment reference is longer than 100 characters.';
     }
 
     $lines = [];
@@ -67,11 +82,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
             $orderId = next_id($pdo, 'order', 'OrderID');
             $pdo->prepare(
-                'INSERT INTO `order` (OrderID, UserID, TotalAmount, OrderStatus, ShippingAddress)
-                 VALUES (:id, :uid, :total, :status, :addr)'
+                'INSERT INTO `order` (OrderID, UserID, TotalAmount, OrderStatus, PaymentMethod, PaymentReference, ShippingAddress)
+                 VALUES (:id, :uid, :total, :status, :pm, :pref, :addr)'
             )->execute([
                 ':id' => $orderId, ':uid' => (int) $user['UserID'],
-                ':total' => $total, ':status' => 'Pending', ':addr' => $shipping,
+                ':total' => $total, ':status' => 'Pending',
+                ':pm' => $paymentMethod,
+                ':pref' => $selectedPaymentInfo['requires_ref'] ? $paymentRef : null,
+                ':addr' => $shipping,
             ]);
 
             $itemStmt = $pdo->prepare(
@@ -147,6 +165,47 @@ ajax_errors($errors);
               <label class="form-label" for="shipping_address">Shipping address <span class="req">*</span></label>
               <textarea class="form-control" id="shipping_address" name="shipping_address" rows="2"
                         placeholder="House / Road / Area, City, Postcode" required><?= old('shipping_address') ?></textarea>
+            </div>
+
+            <h2 class="form-section-title">Payment method</h2>
+            <div class="mb-3">
+              <div class="checkout-payment-methods">
+                <?php
+                $activeMethod = old('payment_method', 'Cash on Delivery');
+                $paymentOptions = checkout_payment_methods();
+                foreach ($paymentOptions as $pKey => $pOpt):
+                    $pId = 'order_pay_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($pKey));
+                    $isChecked = $activeMethod === $pKey;
+                ?>
+                <div class="form-check payment-method-option border rounded-3 p-2 mb-2 <?= $isChecked ? 'border-primary bg-light' : '' ?>">
+                  <input class="form-check-input ms-1 me-2" type="radio" name="payment_method" id="<?= $pId ?>"
+                         value="<?= htmlspecialchars($pKey) ?>" <?= $isChecked ? 'checked' : '' ?>
+                         data-requires-ref="<?= $pOpt['requires_ref'] ? '1' : '0' ?>"
+                         data-ref-label="<?= htmlspecialchars($pOpt['ref_label']) ?>"
+                         data-ref-placeholder="<?= htmlspecialchars($pOpt['ref_placeholder']) ?>">
+                  <label class="form-check-label w-100" style="cursor:pointer;" for="<?= $pId ?>">
+                    <span class="fw-semibold text-dark"><i class="<?= $pOpt['icon'] ?> me-1 text-primary"></i><?= htmlspecialchars($pOpt['label']) ?></span>
+                    <small class="d-block text-muted mt-1 lh-sm"><?= $pOpt['desc'] ?></small>
+                  </label>
+                </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+
+            <?php
+            $optInfo = $paymentOptions[$activeMethod] ?? $paymentOptions['Cash on Delivery'];
+            $showRef = !empty($optInfo['requires_ref']);
+            ?>
+            <div class="mb-3" id="order_payment_reference_group" style="<?= $showRef ? '' : 'display: none;' ?>">
+              <label class="form-label" for="order_payment_reference" id="order_payment_reference_label">
+                <?= htmlspecialchars($optInfo['ref_label'] ?: 'Transaction reference') ?> <span class="req">*</span>
+              </label>
+              <input class="form-control" type="text" id="order_payment_reference" name="payment_reference"
+                     maxlength="100" value="<?= htmlspecialchars((string) old('payment_reference')) ?>"
+                     placeholder="<?= htmlspecialchars($optInfo['ref_placeholder'] ?: 'Enter reference ID') ?>">
+              <div class="form-text">
+                Keep the transaction SMS/receipt handy so our accounts team can match your payment.
+              </div>
             </div>
 
             <h2 class="form-section-title">Products</h2>
@@ -255,4 +314,36 @@ ajax_errors($errors);
   </div>
 </section>
 <script src="assets/form-items.js"></script>
+<script>
+document.querySelectorAll('input[name="payment_method"]').forEach(function (radio) {
+  radio.addEventListener('change', function () {
+    var refGroup = document.getElementById('order_payment_reference_group');
+    var refInput = document.getElementById('order_payment_reference');
+    var refLabel = document.getElementById('order_payment_reference_label');
+    if (!refGroup || !refInput || !refLabel) return;
+
+    var req = this.getAttribute('data-requires-ref') === '1';
+    var labelText = this.getAttribute('data-ref-label') || 'Transaction reference';
+    var placeholderText = this.getAttribute('data-ref-placeholder') || 'Enter reference ID';
+
+    document.querySelectorAll('.payment-method-option').forEach(function (opt) {
+      opt.classList.remove('border-primary', 'bg-light');
+    });
+    var parentOption = this.closest('.payment-method-option');
+    if (parentOption) {
+      parentOption.classList.add('border-primary', 'bg-light');
+    }
+
+    if (req) {
+      refGroup.style.display = '';
+      refLabel.innerHTML = labelText + ' <span class="req">*</span>';
+      refInput.placeholder = placeholderText;
+      refInput.focus();
+    } else {
+      refGroup.style.display = 'none';
+      refInput.value = '';
+    }
+  });
+});
+</script>
 <?= partial_render('partials/footer.php') ?>

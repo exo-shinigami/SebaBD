@@ -406,6 +406,8 @@ CREATE TABLE `order` (
   `OrderDate` datetime DEFAULT current_timestamp(),
   `TotalAmount` decimal(12,2) NOT NULL,
   `OrderStatus` varchar(50) DEFAULT 'Pending',
+  `PaymentMethod` varchar(50) NOT NULL DEFAULT 'Cash on Delivery',
+  `PaymentReference` varchar(255) DEFAULT NULL,
   `OrderType` varchar(20) NOT NULL DEFAULT 'Retail',
   `BranchID` int(11) DEFAULT NULL,
   `ShippingAddress` text DEFAULT NULL,
@@ -416,11 +418,11 @@ CREATE TABLE `order` (
 -- Every sample order hangs off a customer login ('client', 'bijoy'), never a
 -- staff account: a retail order belongs to whoever placed it on the storefront.
 
-INSERT INTO `order` (`OrderID`, `UserID`, `OrderDate`, `TotalAmount`, `OrderStatus`, `OrderType`, `BranchID`, `ShippingAddress`) VALUES
-(1, 4, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Retail', NULL, 'Plot 12, Road 5, Banani, Dhaka 1213'),
-(2, 4, '2024-03-05 14:30:00', 132000.00, 'Processing', 'Retail', NULL, 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
-(3, 5, '2024-03-10 09:00:00', 24000.00, 'Pending', 'Retail', NULL, 'Flat 4B, Green Road, Dhaka 1205'),
-(4, 5, '2024-03-12 16:45:00', 288000.00, 'Completed', 'Retail', NULL, 'Holding 9, Agrabad C/A, Chattogram 4100');
+INSERT INTO `order` (`OrderID`, `UserID`, `OrderDate`, `TotalAmount`, `OrderStatus`, `PaymentMethod`, `PaymentReference`, `OrderType`, `BranchID`, `ShippingAddress`) VALUES
+(1, 4, '2024-03-01 10:15:00', 210000.00, 'Completed', 'Bank Transfer', 'DBBL-TRX-88319', 'Retail', NULL, 'Plot 12, Road 5, Banani, Dhaka 1213'),
+(2, 4, '2024-03-05 14:30:00', 132000.00, 'Processing', 'bKash', 'BK-9X281M0', 'Retail', NULL, 'House 21, Road 3, Dhanmondi, Dhaka 1205'),
+(3, 5, '2024-03-10 09:00:00', 24000.00, 'Pending', 'Cash on Delivery', NULL, 'Retail', NULL, 'Flat 4B, Green Road, Dhaka 1205'),
+(4, 5, '2024-03-12 16:45:00', 288000.00, 'Completed', 'bKash', 'BK-7A11902', 'Retail', NULL, 'Holding 9, Agrabad C/A, Chattogram 4100');
 
 -- ===========================================================================
 -- 10. order_item — one line of an order (prices snapshotted at order time)
@@ -789,6 +791,14 @@ ALTER TABLE `quotation`
     AFTER `Subject`,
   ADD COLUMN IF NOT EXISTS `ContactEmail` varchar(255) DEFAULT NULL AFTER `ContactName`,
   ADD COLUMN IF NOT EXISTS `ContactPhone` varchar(50) DEFAULT NULL AFTER `ContactEmail`;
+ALTER TABLE `order`
+  ADD COLUMN IF NOT EXISTS `PaymentMethod` varchar(50) NOT NULL DEFAULT 'Cash on Delivery'
+    COMMENT 'Customer selected payment method at checkout (Cash on Delivery, bKash, Nagad, Bank Transfer)'
+    AFTER `OrderStatus`,
+  ADD COLUMN IF NOT EXISTS `PaymentReference` varchar(255) DEFAULT NULL
+    COMMENT 'Transaction ID (TrxID) or bank deposit reference provided by customer'
+    AFTER `PaymentMethod`;
+
 -- END UPGRADE
 
 -- ===========================================================================

@@ -1285,6 +1285,17 @@ form.is-busy button[type="submit"]::after {
     }
 }
 
+.payment-method-option {
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.payment-method-option:hover {
+    background-color: #f8f9fa;
+}
+.payment-method-option .form-check-input {
+    margin-top: 0.35rem;
+}
+
 /* ------------------------------------------------------- documents */
 
 .document-toolbar {

@@ -145,11 +145,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $lines       = cart_lines();
         $totals      = cart_totals($lines['lines']);
         $address     = trim((string) post_str('shipping_address'));
-        $note        = trim((string) post_str('order_note'));
+        $note          = trim((string) post_str('order_note'));
+        $paymentMethod = post_str('payment_method', 'Cash on Delivery');
+        $paymentRef    = trim((string) post_str('payment_reference'));
+
+        $availableMethods = checkout_payment_methods();
+        if (!isset($availableMethods[$paymentMethod])) {
+            $paymentMethod = 'Cash on Delivery';
+        }
+        $selectedPaymentInfo = $availableMethods[$paymentMethod];
 
         // Held for the redisplay below, so a rejected checkout does not wipe
         // the address the customer just typed.
-        keep_old(['shipping_address' => $address, 'order_note' => $note]);
+        keep_old([
+            'shipping_address'  => $address,
+            'order_note'        => $note,
+            'payment_method'    => $paymentMethod,
+            'payment_reference' => $paymentRef,
+        ]);
 
         if (!$lines['lines']) {
             $errors[] = 'Your basket is empty — add a product before checking out.';
@@ -166,6 +179,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (mb_strlen($note) > 500) {
             $errors[] = 'The order note is longer than 500 characters.';
         }
+        if ($selectedPaymentInfo['requires_ref'] && $paymentRef === '') {
+            $errors[] = 'Please enter your ' . $selectedPaymentInfo['ref_label'] . ' for ' . $paymentMethod . ' payment.';
+        } elseif ($selectedPaymentInfo['requires_ref'] && mb_strlen($paymentRef) > 100) {
+            $errors[] = 'The payment reference is longer than 100 characters.';
+        }
         if (post_str('terms') === '') {
             $errors[] = 'Please confirm the order summary before placing the order.';
         }
@@ -181,12 +199,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Every storefront order is a customer order: Retail,
                     // booked to no branch (it hangs off the user). Staff never
                     // reach this point — refuse_staff_order() stopped them.
-                    $orderId = db_transaction($pdo, function (PDO $tx) use ($user, $lines, $totals, $address, $note) {
+                    $orderId = db_transaction($pdo, function (PDO $tx) use ($user, $lines, $totals, $address, $note, $paymentMethod, $paymentRef, $selectedPaymentInfo) {
                         $orderId = db_insert($tx, 'order', [
                             'UserID'          => (int) $user['UserID'],
                             'OrderDate'       => date('Y-m-d H:i:s'),
                             'TotalAmount'     => $totals['subtotal'],
-                            'OrderStatus'     => 'Pending',
+                            'OrderStatus'      => 'Pending',
+                            'PaymentMethod'    => $paymentMethod,
+                            'PaymentReference' => $selectedPaymentInfo['requires_ref'] ? $paymentRef : null,
                             'OrderType'       => ORDER_TYPE_RETAIL,
                             'BranchID'        => null,
                             'ShippingAddress' => $address . ($note !== '' ? "\n\nNote: " . $note : ''),
@@ -207,7 +227,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     cart_clear();
                     clear_old();
-                    flash_set('success', 'Thank you — order #' . $orderId . ' has been placed. '
+                    $payNote = $paymentMethod === 'Cash on Delivery' ? 'Cash on Delivery' : $paymentMethod . ' (Ref: ' . $paymentRef . ')';
+                    flash_set('success', 'Thank you — order #' . $orderId . ' has been placed with ' . $payNote . '. '
                         . 'The sales team confirms it and raises the invoice next.');
                     post_success('order-detail.php?id=' . $orderId . '&placed=1');
                 } catch (Throwable $e) {
@@ -464,6 +485,47 @@ $page_title = 'Your basket';
             </div>
 
             <div class="mb-3">
+              <label class="form-label fw-semibold d-block mb-2">Payment method <span class="text-danger">*</span></label>
+              <div class="checkout-payment-methods">
+                <?php
+                $activeMethod = old('payment_method', 'Cash on Delivery');
+                $paymentOptions = checkout_payment_methods();
+                foreach ($paymentOptions as $pKey => $pOpt):
+                    $pId = 'pay_' . preg_replace('/[^a-zA-Z0-9]/', '_', strtolower($pKey));
+                    $isChecked = $activeMethod === $pKey;
+                ?>
+                <div class="form-check payment-method-option border rounded-3 p-2 mb-2 <?= $isChecked ? 'border-primary bg-light' : '' ?>">
+                  <input class="form-check-input ms-1 me-2" type="radio" name="payment_method" id="<?= $pId ?>"
+                         value="<?= htmlspecialchars($pKey) ?>" <?= $isChecked ? 'checked' : '' ?>
+                         data-requires-ref="<?= $pOpt['requires_ref'] ? '1' : '0' ?>"
+                         data-ref-label="<?= htmlspecialchars($pOpt['ref_label']) ?>"
+                         data-ref-placeholder="<?= htmlspecialchars($pOpt['ref_placeholder']) ?>">
+                  <label class="form-check-label w-100" style="cursor:pointer;" for="<?= $pId ?>">
+                    <span class="fw-semibold text-dark"><i class="<?= $pOpt['icon'] ?> me-1 text-primary"></i><?= htmlspecialchars($pOpt['label']) ?></span>
+                    <small class="d-block text-muted mt-1 lh-sm"><?= $pOpt['desc'] ?></small>
+                  </label>
+                </div>
+                <?php endforeach; ?>
+              </div>
+            </div>
+
+            <?php
+            $optInfo = $paymentOptions[$activeMethod] ?? $paymentOptions['Cash on Delivery'];
+            $showRef = !empty($optInfo['requires_ref']);
+            ?>
+            <div class="mb-3" id="payment_reference_group" style="<?= $showRef ? '' : 'display: none;' ?>">
+              <label class="form-label" for="payment_reference" id="payment_reference_label">
+                <?= htmlspecialchars($optInfo['ref_label'] ?: 'Transaction reference') ?> <span class="text-danger">*</span>
+              </label>
+              <input class="form-control" type="text" id="payment_reference" name="payment_reference"
+                     maxlength="100" value="<?= htmlspecialchars((string) old('payment_reference')) ?>"
+                     placeholder="<?= htmlspecialchars($optInfo['ref_placeholder'] ?: 'Enter reference ID') ?>">
+              <div class="form-text" id="payment_reference_help">
+                Keep the transaction SMS/receipt handy so our accounts team can match your payment.
+              </div>
+            </div>
+
+            <div class="mb-3">
               <label class="form-label" for="order_note">Order note <span class="text-muted">(optional)</span></label>
               <textarea class="form-control" id="order_note" name="order_note" rows="2" maxlength="500"
                         placeholder="Purchase order number, delivery window, installation needs…"><?= old('order_note') ?></textarea>
@@ -498,4 +560,36 @@ $page_title = 'Your basket';
   </div>
 </section>
 
+<script>
+document.querySelectorAll('input[name="payment_method"]').forEach(function (radio) {
+  radio.addEventListener('change', function () {
+    var refGroup = document.getElementById('payment_reference_group');
+    var refInput = document.getElementById('payment_reference');
+    var refLabel = document.getElementById('payment_reference_label');
+    if (!refGroup || !refInput || !refLabel) return;
+
+    var req = this.getAttribute('data-requires-ref') === '1';
+    var labelText = this.getAttribute('data-ref-label') || 'Transaction reference';
+    var placeholderText = this.getAttribute('data-ref-placeholder') || 'Enter reference ID';
+
+    document.querySelectorAll('.payment-method-option').forEach(function (opt) {
+      opt.classList.remove('border-primary', 'bg-light');
+    });
+    var parentOption = this.closest('.payment-method-option');
+    if (parentOption) {
+      parentOption.classList.add('border-primary', 'bg-light');
+    }
+
+    if (req) {
+      refGroup.style.display = '';
+      refLabel.innerHTML = labelText + ' <span class="text-danger">*</span>';
+      refInput.placeholder = placeholderText;
+      refInput.focus();
+    } else {
+      refGroup.style.display = 'none';
+      refInput.value = '';
+    }
+  });
+});
+</script>
 <?= partial_render('partials/footer.php') ?>

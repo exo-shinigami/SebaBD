@@ -685,7 +685,7 @@ if ($dbUp) {
                     i.TotalAmount, i.RemainingBalance, i.AmountInWords,
                     b.BranchName, b.BranchAddress, b.ContactNo,
                     c.CompanyName, c.ContactPerson, c.Email, c.Phone, c.Address,
-                    o.OrderDate, o.ShippingAddress, o.OrderStatus,
+                    o.OrderDate, o.ShippingAddress, o.OrderStatus, o.PaymentMethod AS OrderPaymentMethod, o.PaymentReference AS OrderPaymentReference,
                     ou.FullName AS OrderCustomer, ou.Username AS OrderUsername, ou.Email AS OrderEmail, ou.Phone AS OrderPhone
              FROM invoice i
              LEFT JOIN client_branch b ON b.BranchID = i.BranchID
@@ -790,6 +790,7 @@ if ($dbUp) {
             // otherwise the first branch of the customer's company.
             $order = db_fetch_all(
                 'SELECT o.OrderID, o.OrderDate, o.TotalAmount, o.OrderStatus, o.OrderType,
+                        o.PaymentMethod, o.PaymentReference,
                         o.BranchID AS OrderBranchID, o.ShippingAddress,
                         u.UserID, u.FullName, u.Email, u.Phone,
                         c.ClientID, c.CompanyName,
@@ -1230,12 +1231,26 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
                    value="<?= htmlspecialchars((string) $invoice['RemainingBalance']) ?>" required>
           </div>
           <div class="mb-3">
+            <?php
+            $suggestedMethod = match ($invoice['OrderPaymentMethod'] ?? '') {
+                'Cash on Delivery' => 'Cash',
+                'bKash'            => 'bKash',
+                'Nagad'            => 'Nagad',
+                'Bank Transfer'    => 'Bank Transfer',
+                default            => 'Cash',
+            };
+            ?>
             <label class="form-label" for="payment_method">Method</label>
             <select class="form-select" id="payment_method" name="payment_method">
               <?php foreach (payment_methods() as $method): ?>
-              <option value="<?= htmlspecialchars($method) ?>"><?= htmlspecialchars($method) ?></option>
+              <option value="<?= htmlspecialchars($method) ?>" <?= $suggestedMethod === $method ? 'selected' : '' ?>><?= htmlspecialchars($method) ?></option>
               <?php endforeach; ?>
             </select>
+            <?php if (!empty($invoice['OrderPaymentReference'])): ?>
+            <div class="form-text text-primary small">
+              <i class="fa-solid fa-circle-info me-1"></i>Customer reference: <strong><?= htmlspecialchars($invoice['OrderPaymentReference']) ?></strong>
+            </div>
+            <?php endif; ?>
           </div>
           <div class="mb-3">
             <label class="form-label" for="receipt_date">Receipt date</label>
@@ -1368,6 +1383,9 @@ echo admin_lead('Invoices &amp; payments', 'Raise an invoice from a quotation or
             linked to it permanently.
             <?php elseif ($fromOrder): ?>
             Raising an invoice for <strong>order #<?= (int) $fromOrder['OrderID'] ?></strong>
+            <?php if (!empty($fromOrder['PaymentMethod'])): ?>
+            · <span class="badge bg-secondary"><?= htmlspecialchars($fromOrder['PaymentMethod']) ?><?php if (!empty($fromOrder['PaymentReference'])): ?>: <?= htmlspecialchars($fromOrder['PaymentReference']) ?><?php endif; ?></span>
+            <?php endif; ?>
             placed by <?= htmlspecialchars($fromOrder['FullName']) ?> — the order lines are copied below.
             <?php else: ?>
             Billed to one customer branch, or to a retail customer when no branch applies.

@@ -742,6 +742,89 @@ function order_statuses(): array
     return ['Pending', 'Processing', 'Completed', 'Cancelled'];
 }
 
+/**
+ * Customer payment methods available at checkout.
+ *
+ * Each method defines its customer-facing label, FontAwesome icon,
+ * instructions, whether it requires a transaction reference, and placeholder.
+ */
+function checkout_payment_methods(): array
+{
+    static $methods = null;
+    if ($methods !== null) {
+        return $methods;
+    }
+
+    $cfg = require __DIR__ . '/config.php';
+    $payments = $cfg['payments'] ?? [];
+    $bkashNum = $payments['bkash_number'] ?? '01711-000000 (Merchant)';
+    $nagadNum = $payments['nagad_number'] ?? '01811-000000 (Merchant)';
+    $bankInfo = $payments['bank_details'] ?? 'SebaBD Ltd, A/C: 108.110.12345, Dutch-Bangla Bank (Banani Branch)';
+
+    $methods = [
+        'Cash on Delivery' => [
+            'key'             => 'Cash on Delivery',
+            'label'           => 'Cash on Delivery (COD)',
+            'short_label'     => 'Cash on Delivery',
+            'icon'            => 'fa-solid fa-hand-holding-dollar',
+            'badge_class'     => 'report-badge-plain',
+            'desc'            => 'Pay in cash when your order is delivered to your address.',
+            'requires_ref'    => false,
+            'ref_label'       => '',
+            'ref_placeholder' => '',
+        ],
+        'bKash' => [
+            'key'             => 'bKash',
+            'label'           => 'bKash (Send Money / Payment)',
+            'short_label'     => 'bKash',
+            'icon'            => 'fa-solid fa-mobile-screen',
+            'badge_class'     => 'report-badge-info',
+            'desc'            => 'Send payment to <strong>' . htmlspecialchars($bkashNum) . '</strong> and enter your bKash Transaction ID (TrxID) below.',
+            'requires_ref'    => true,
+            'ref_label'       => 'bKash Transaction ID (TrxID)',
+            'ref_placeholder' => 'e.g. 9J28XK9L01',
+        ],
+        'Nagad' => [
+            'key'             => 'Nagad',
+            'label'           => 'Nagad (Send Money / Payment)',
+            'short_label'     => 'Nagad',
+            'icon'            => 'fa-solid fa-mobile-screen-button',
+            'badge_class'     => 'report-badge-warn',
+            'desc'            => 'Send payment to <strong>' . htmlspecialchars($nagadNum) . '</strong> and enter your Nagad Transaction ID (TrxID) below.',
+            'requires_ref'    => true,
+            'ref_label'       => 'Nagad Transaction ID (TrxID)',
+            'ref_placeholder' => 'e.g. 7A19BQ8M32',
+        ],
+        'Bank Transfer' => [
+            'key'             => 'Bank Transfer',
+            'label'           => 'Bank Transfer / Deposit',
+            'short_label'     => 'Bank Transfer',
+            'icon'            => 'fa-solid fa-building-columns',
+            'badge_class'     => 'report-badge-ok',
+            'desc'            => 'Transfer to <strong>' . htmlspecialchars($bankInfo) . '</strong> and enter your deposit slip number or transfer reference below.',
+            'requires_ref'    => true,
+            'ref_label'       => 'Deposit Slip # or Transfer Ref',
+            'ref_placeholder' => 'e.g. Slip #48192 or Bank Ref',
+        ],
+    ];
+
+    return $methods;
+}
+
+/**
+ * Returns a styled badge for an order payment method.
+ */
+function payment_method_badge(string $method): string
+{
+    $methods = checkout_payment_methods();
+    $info = $methods[$method] ?? null;
+    $class = $info['badge_class'] ?? 'report-badge-plain';
+    $icon = $info['icon'] ?? 'fa-solid fa-money-check';
+    $label = htmlspecialchars($info['short_label'] ?? $method);
+
+    return '<span class="report-badge ' . $class . '"><i class="' . $icon . ' me-1"></i>' . $label . '</span>';
+}
+
 /** Has this order reached a state where nothing more will happen? */
 function order_is_closed(string $status): bool
 {

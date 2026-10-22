@@ -72,6 +72,10 @@
         ['branch name', ['branch_name']],
         ['address', ['shipping_address', 'address', 'branch_address']],
         ['subject', ['subject']],
+        ['payment reference', ['payment_reference']],
+        ['trxid', ['payment_reference']],
+        ['transaction id', ['payment_reference']],
+        ['payment method', ['payment_method']],
         ['credentials', ['identifier', 'password']],
         ['product', ['product_id[]']]
     ];

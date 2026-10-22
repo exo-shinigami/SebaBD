@@ -337,6 +337,8 @@ erDiagram
         datetime OrderDate
         decimal TotalAmount
         varchar OrderStatus
+        varchar PaymentMethod
+        varchar PaymentReference
         varchar OrderType
         int BranchID FK
         text ShippingAddress
@@ -574,6 +576,8 @@ word `order`, so every query uses `` `order` ``.)
 | `OrderDate` | `datetime` | | Defaults to `CURRENT_TIMESTAMP` |
 | `TotalAmount` | `decimal(12,2)` | | Header total; equals the sum of its `order_item` rows |
 | `OrderStatus` | `varchar(50)` | | Defaults to `Pending`; also `Processing`, `Completed`, `Cancelled` |
+| `PaymentMethod` | `varchar(50)` | | Selected at checkout: `Cash on Delivery` (default), `bKash`, `Nagad`, `Bank Transfer` |
+| `PaymentReference` | `varchar(255)` | | Transaction ID (TrxID) or bank deposit slip reference entered by customer |
 | `OrderType` | `varchar(20)` | | Defaults to `Retail`. Staff accounts no longer order from the storefront, so the legacy `Internal` value only marks historical rows booked to SebaBD's own branch |
 | `BranchID` | `int` | FK → `client_branch` | `ON DELETE SET NULL`. `NULL` for a retail order (it hangs off the user); the internal house branch for an internal order |
 | `ShippingAddress` | `text` | | Typed by the customer at checkout |
