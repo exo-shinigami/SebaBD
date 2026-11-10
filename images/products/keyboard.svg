@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="Desktop Keyboard illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="deck" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a4854"/>
+      <stop offset="1" stop-color="#1b242c"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="160" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- Keyboard Base Deck -->
+  <rect x="80" y="150" width="440" height="155" rx="14" fill="url(#deck)" stroke="#475569" stroke-width="2"/>
+
+  <!-- Status LEDs (Caps Lock, Num Lock, Power) -->
+  <circle cx="475" cy="165" r="3" fill="#37d3c3"/>
+  <circle cx="488" cy="165" r="3" fill="#0ea5b5"/>
+  <circle cx="501" cy="165" r="3" fill="#5d6b77"/>
+
+  <!-- Function Row (F1-F12, Esc) -->
+  <g fill="#475569">
+    <rect x="98" y="162" width="22" height="12" rx="3"/>
+    <rect x="126" y="162" width="22" height="12" rx="3"/>
+    <rect x="152" y="162" width="22" height="12" rx="3"/>
+    <rect x="178" y="162" width="22" height="12" rx="3"/>
+    <rect x="204" y="162" width="22" height="12" rx="3"/>
+    <rect x="236" y="162" width="22" height="12" rx="3"/>
+    <rect x="262" y="162" width="22" height="12" rx="3"/>
+    <rect x="288" y="162" width="22" height="12" rx="3"/>
+    <rect x="314" y="162" width="22" height="12" rx="3"/>
+    <rect x="346" y="162" width="22" height="12" rx="3"/>
+    <rect x="372" y="162" width="22" height="12" rx="3"/>
+    <rect x="398" y="162" width="22" height="12" rx="3"/>
+    <rect x="424" y="162" width="22" height="12" rx="3"/>
+  </g>
+
+  <!-- Number Row -->
+  <g fill="#5d6b77">
+    <rect x="98" y="180" width="24" height="20" rx="3"/><rect x="126" y="180" width="24" height="20" rx="3"/>
+    <rect x="154" y="180" width="24" height="20" rx="3"/><rect x="182" y="180" width="24" height="20" rx="3"/>
+    <rect x="210" y="180" width="24" height="20" rx="3"/><rect x="238" y="180" width="24" height="20" rx="3"/>
+    <rect x="266" y="180" width="24" height="20" rx="3"/><rect x="294" y="180" width="24" height="20" rx="3"/>
+    <rect x="322" y="180" width="24" height="20" rx="3"/><rect x="350" y="180" width="24" height="20" rx="3"/>
+    <rect x="378" y="180" width="24" height="20" rx="3"/><rect x="406" y="180" width="24" height="20" rx="3"/>
+    <rect x="434" y="180" width="38" height="20" rx="3" fill="#475569"/>
+    <!-- Numpad / Nav -->
+    <rect x="480" y="180" width="26" height="20" rx="3"/>
+  </g>
+
+  <!-- QWERTY Row -->
+  <g fill="#5d6b77">
+    <rect x="98" y="204" width="34" height="20" rx="3" fill="#475569"/><rect x="136" y="204" width="24" height="20" rx="3"/>
+    <rect x="164" y="204" width="24" height="20" rx="3"/><rect x="192" y="204" width="24" height="20" rx="3"/>
+    <rect x="220" y="204" width="24" height="20" rx="3"/><rect x="248" y="204" width="24" height="20" rx="3"/>
+    <rect x="276" y="204" width="24" height="20" rx="3"/><rect x="304" y="204" width="24" height="20" rx="3"/>
+    <rect x="332" y="204" width="24" height="20" rx="3"/><rect x="360" y="204" width="24" height="20" rx="3"/>
+    <rect x="388" y="204" width="24" height="20" rx="3"/><rect x="416" y="204" width="24" height="20" rx="3"/>
+    <rect x="444" y="204" width="28" height="20" rx="3" fill="#475569"/>
+    <rect x="480" y="204" width="26" height="20" rx="3"/>
+  </g>
+
+  <!-- Home Row -->
+  <g fill="#5d6b77">
+    <rect x="98" y="228" width="40" height="20" rx="3" fill="#475569"/><rect x="142" y="228" width="24" height="20" rx="3"/>
+    <rect x="170" y="228" width="24" height="20" rx="3"/><rect x="198" y="228" width="24" height="20" rx="3"/>
+    <rect x="226" y="228" width="24" height="20" rx="3"/><rect x="254" y="228" width="24" height="20" rx="3"/>
+    <rect x="282" y="228" width="24" height="20" rx="3"/><rect x="310" y="228" width="24" height="20" rx="3"/>
+    <rect x="338" y="228" width="24" height="20" rx="3"/><rect x="366" y="228" width="24" height="20" rx="3"/>
+    <rect x="394" y="228" width="24" height="20" rx="3"/><rect x="422" y="228" width="50" height="20" rx="3" fill="#0ea5b5" opacity="0.9"/>
+    <rect x="480" y="228" width="26" height="20" rx="3"/>
+  </g>
+
+  <!-- Bottom / Spacebar Row -->
+  <g fill="#5d6b77">
+    <rect x="98" y="252" width="36" height="22" rx="3" fill="#475569"/><rect x="138" y="252" width="26" height="22" rx="3" fill="#475569"/>
+    <rect x="168" y="252" width="26" height="22" rx="3" fill="#475569"/>
+    <!-- Spacebar -->
+    <rect x="198" y="252" width="168" height="22" rx="4" fill="#0ea5b5" opacity="0.7"/>
+    <rect x="370" y="252" width="26" height="22" rx="3" fill="#475569"/>
+    <rect x="400" y="252" width="26" height="22" rx="3" fill="#475569"/>
+    <rect x="430" y="252" width="42" height="22" rx="3" fill="#475569"/>
+    <!-- Arrow keys -->
+    <rect x="480" y="252" width="26" height="22" rx="3"/>
+  </g>
+
+  <!-- Drop Shadow -->
+  <ellipse cx="300" cy="340" rx="210" ry="14" fill="#1b242c" opacity="0.10"/>
+</svg>

@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="M.2 NVMe SSD illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="pcb" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1e2630"/>
+      <stop offset="1" stop-color="#141a21"/>
+    </linearGradient>
+    <linearGradient id="controller" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#94a3b8"/>
+      <stop offset="0.5" stop-color="#475569"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="160" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- M.2 2280 NVMe SSD Board (Horizontal Gumstick) -->
+  <!-- Left Side: Semicircular mounting screw notch -->
+  <path d="M120 175 
+           L480 175 
+           L480 275 
+           L120 275 
+           A 16 16 0 0 1 120 243 
+           L120 207 
+           A 16 16 0 0 1 120 175 Z" 
+        fill="url(#pcb)" stroke="#334155" stroke-width="2"/>
+
+  <!-- Gold M-Key Edge Connector Fingers (Right side) -->
+  <g fill="url(#gold)">
+    <!-- Top connector segment -->
+    <rect x="475" y="180" width="22" height="38" rx="2"/>
+    <!-- M-Key notch gap around y=222 -->
+    <!-- Bottom connector segment -->
+    <rect x="475" y="226" width="22" height="44" rx="2"/>
+  </g>
+  <!-- Gold connector pin division lines -->
+  <g stroke="#92400e" stroke-width="1.5">
+    <line x1="482" y1="180" x2="482" y2="218"/><line x1="488" y1="180" x2="488" y2="218"/>
+    <line x1="482" y1="226" x2="482" y2="270"/><line x1="488" y1="226" x2="488" y2="270"/>
+  </g>
+
+  <!-- High-Speed PCIe 4.0 NVMe Controller Chip (Nickel-plated) -->
+  <rect x="390" y="190" width="60" height="70" rx="4" fill="url(#controller)" stroke="#64748b" stroke-width="1.5"/>
+  <text x="420" y="222" fill="#ffffff" font-size="9" font-family="sans-serif" font-weight="bold" text-anchor="middle">NVMe</text>
+  <text x="420" y="235" fill="#37d3c3" font-size="8" font-family="sans-serif" font-weight="bold" text-anchor="middle">PCIe 4.0</text>
+
+  <!-- DRAM Cache Chip -->
+  <rect x="335" y="198" width="38" height="54" rx="3" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <rect x="342" y="206" width="24" height="6" rx="2" fill="#0ea5b5" opacity="0.6"/>
+
+  <!-- V-NAND Flash Memory Package 1 -->
+  <rect x="230" y="190" width="85" height="70" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+  <text x="272" y="224" fill="#94a3b8" font-size="10" font-family="sans-serif" font-weight="bold" text-anchor="middle">V-NAND</text>
+  <rect x="245" y="234" width="55" height="4" rx="2" fill="#0ea5b5" opacity="0.8"/>
+
+  <!-- V-NAND Flash Memory Package 2 -->
+  <rect x="135" y="190" width="85" height="70" rx="4" fill="#0f172a" stroke="#334155" stroke-width="1.5"/>
+  <text x="177" y="224" fill="#94a3b8" font-size="10" font-family="sans-serif" font-weight="bold" text-anchor="middle">V-NAND</text>
+  <rect x="150" y="234" width="55" height="4" rx="2" fill="#0ea5b5" opacity="0.8"/>
+
+  <!-- SMD Passives / Capacitors -->
+  <g fill="#d97706">
+    <rect x="325" y="195" width="4" height="6" rx="1"/>
+    <rect x="325" y="205" width="4" height="6" rx="1"/>
+    <rect x="325" y="215" width="4" height="6" rx="1"/>
+    <rect x="325" y="225" width="4" height="6" rx="1"/>
+    <rect x="325" y="235" width="4" height="6" rx="1"/>
+    <rect x="380" y="195" width="4" height="6" rx="1"/>
+    <rect x="380" y="205" width="4" height="6" rx="1"/>
+  </g>
+
+  <!-- Power Status LED -->
+  <circle cx="462" cy="190" r="3" fill="#37d3c3"/>
+
+  <!-- Drop Shadow -->
+  <ellipse cx="300" cy="335" rx="190" ry="14" fill="#1b242c" opacity="0.10"/>
+</svg>

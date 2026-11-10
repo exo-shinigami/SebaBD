@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="Wi-Fi Range Extender illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="extBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="160" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- Dual side antennas -->
+  <!-- Left antenna -->
+  <rect x="180" y="80" width="16" height="150" rx="8" fill="#475569" transform="rotate(-15 188 230)"/>
+  <!-- Right antenna -->
+  <rect x="404" y="80" width="16" height="150" rx="8" fill="#475569" transform="rotate(15 412 230)"/>
+
+  <!-- Wi-Fi Boost Waves -->
+  <g fill="none" stroke="#0ea5b5" stroke-width="3" stroke-linecap="round" opacity="0.55">
+    <path d="M265 110 A 40 40 0 0 1 335 110"/>
+    <path d="M245 90 A 65 65 0 0 1 355 90"/>
+    <path d="M225 70 A 90 90 0 0 1 375 70"/>
+  </g>
+
+  <!-- Extender Body (Vertical Wall Plug Unit) -->
+  <rect x="225" y="140" width="150" height="180" rx="20" fill="url(#extBody)" stroke="#cbd5e1" stroke-width="3"/>
+
+  <!-- Vent Grilles & Edge Accents -->
+  <rect x="235" y="160" width="130" height="6" rx="3" fill="#cbd5e1"/>
+  <rect x="235" y="172" width="130" height="6" rx="3" fill="#cbd5e1"/>
+
+  <!-- WPS Button (Center Circular) -->
+  <circle cx="300" cy="225" r="24" fill="#0ea5b5"/>
+  <circle cx="300" cy="225" r="20" fill="#37d3c3" opacity="0.3"/>
+  <path d="M292 225 L308 225 M300 217 L300 233" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- LED Status Lights -->
+  <circle cx="270" cy="280" r="5" fill="#37d3c3"/>
+  <circle cx="290" cy="280" r="5" fill="#37d3c3"/>
+  <circle cx="310" cy="280" r="5" fill="#37d3c3"/>
+  <circle cx="330" cy="280" r="5" fill="#5d6b77"/>
+
+  <!-- Bottom Ethernet Port Indication -->
+  <rect x="275" y="312" width="50" height="8" rx="2" fill="#64748b"/>
+
+  <!-- Drop Shadow -->
+  <ellipse cx="300" cy="355" rx="120" ry="14" fill="#1b242c" opacity="0.10"/>
+</svg>

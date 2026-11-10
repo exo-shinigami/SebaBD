@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="HD Webcam illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="camBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#384552"/>
+      <stop offset="1" stop-color="#19222a"/>
+    </linearGradient>
+    <linearGradient id="lensGlass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5b5"/>
+      <stop offset="0.5" stop-color="#091b26"/>
+      <stop offset="1" stop-color="#37d3c3"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="155" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- Monitor Clip / Stand -->
+  <path d="M280 230 L280 280 L230 330 L370 330 L320 280 L320 230 Z" fill="#2d3742"/>
+  <rect x="240" y="325" width="120" height="15" rx="4" fill="#1b242c"/>
+  <ellipse cx="300" cy="345" rx="110" ry="12" fill="#1b242c" opacity="0.12"/>
+
+  <!-- Webcam Main Unit (Pill / Oval Body) -->
+  <rect x="150" y="145" width="300" height="95" rx="47" fill="url(#camBody)"/>
+  <rect x="156" y="151" width="288" height="83" rx="41" fill="#1e2730"/>
+
+  <!-- Front Inset Faceplate -->
+  <rect x="175" y="162" width="250" height="62" rx="31" fill="#12181e"/>
+
+  <!-- Status LED Light -->
+  <circle cx="215" cy="193" r="5" fill="#37d3c3"/>
+  <circle cx="215" cy="193" r="9" fill="#37d3c3" opacity="0.25"/>
+
+  <!-- Large Central Optical Lens -->
+  <circle cx="300" cy="193" r="32" fill="#26313c"/>
+  <circle cx="300" cy="193" r="26" fill="#11171d"/>
+  <circle cx="300" cy="193" r="20" fill="url(#lensGlass)"/>
+  <circle cx="300" cy="193" r="10" fill="#0b131a"/>
+  <!-- Lens Flare Accent -->
+  <circle cx="294" cy="187" r="4" fill="#ffffff" opacity="0.75"/>
+  <circle cx="306" cy="199" r="2" fill="#ffffff" opacity="0.4"/>
+
+  <!-- Dual Microphone Grille Dots -->
+  <g fill="#4b5563">
+    <circle cx="370" cy="189" r="2"/><circle cx="376" cy="189" r="2"/><circle cx="382" cy="189" r="2"/>
+    <circle cx="370" cy="197" r="2"/><circle cx="376" cy="197" r="2"/><circle cx="382" cy="197" r="2"/>
+  </g>
+</svg>

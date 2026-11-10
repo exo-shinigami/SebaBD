@@ -39,7 +39,7 @@ function product_meta(): array
         2 => [
             'badge' => 'Deal',
             'blurb' => 'Dell UltraSharp 4K IPS panel (U2723QE) with USB-C docking and factory colour calibration — 36-month warranty.',
-            'sale'  => 138000.00,
+            'sale'  => 86000.00,
         ],
         3 => [
             'badge' => 'Hot',
@@ -59,18 +59,18 @@ function product_meta(): array
         6  => ['sale' => 74500.00],
         7  => ['badge' => 'New'],
         8  => ['sale' => 76000.00],
-        10 => ['badge' => 'Hot', 'sale' => 110000.00],
+        10 => ['badge' => 'Hot', 'sale' => 118000.00],
         13 => ['badge' => 'New'],
         14 => ['badge' => 'Deal', 'sale' => 104000.00],
         19 => ['sale' => 16000.00],
-        21 => ['badge' => 'New'],
+        21 => ['badge' => 'New', 'sale' => 49500.00],
         22 => ['sale' => 12000.00],
         27 => ['badge' => 'Deal', 'sale' => 3900.00],
-        31 => ['sale' => 20500.00],
-        42 => ['sale' => 5200.00],
-        45 => ['badge' => 'New'],
+        31 => ['sale' => 19000.00],
+        42 => ['sale' => 3900.00],
+        45 => ['badge' => 'New', 'sale' => 47000.00],
         46 => ['badge' => 'Deal', 'sale' => 25500.00],
-        56 => ['badge' => 'New'],
+        56 => ['badge' => 'New', 'sale' => 13800.00],
     ];
 }
 
@@ -82,14 +82,23 @@ function product_meta(): array
 function category_image(string $categoryName, string $productName = ''): string
 {
     $byName = [
-        'UPS'      => 'images/products/accessories/walton-600va-ups.jpg',
-        'AVR'      => 'images/products/accessories/walton-600va-ups.jpg',
-        'Camera'   => 'images/products/accessories/hikvision-2mp-dome-camera-ds-2ce56d0t.jpg',
-        'Keyboard' => 'images/products/accessories/logitech-k380-multi-device-keyboard.jpg',
-        'Headset'  => 'images/products/accessories/logitech-h340-usb-headset.jpg',
-        'Webcam'   => 'images/products/accessories/logitech-c270-hd-webcam.jpg',
-        'Hub'      => 'images/products/accessories/anker-5-in-1-usb-c-hub-a8346.jpg',
-        'Cable'    => 'images/products/accessories/ugreen-usb-c-to-hdmi-cable-1-5m-cm315.jpg',
+        'UPS'          => 'images/products/accessories/walton-600va-ups.jpg',
+        'AVR'          => 'images/products/accessories/walton-600va-ups.jpg',
+        'Camera'       => 'images/products/accessories/hikvision-2mp-dome-camera-ds-2ce56d0t.jpg',
+        'Keyboard'     => 'images/products/accessories/logitech-k380-multi-device-keyboard.jpg',
+        'Headset'      => 'images/products/accessories/logitech-h340-usb-headset.jpg',
+        'Webcam'       => 'images/products/accessories/logitech-c270-hd-webcam.jpg',
+        'Hub'          => 'images/products/accessories/anker-5-in-1-usb-c-hub-a8346.jpg',
+        'Cable'        => 'images/products/accessories/ugreen-usb-c-to-hdmi-cable-1-5m-cm315.jpg',
+        'Router'       => 'images/products/networking/tp-link-archer-c6-ac1200-router.jpg',
+        'Switch'       => 'images/products/networking/cisco-cbs350-24t-24-port-managed-switch.jpg',
+        'Access Point' => 'images/products/networking/ubiquiti-unifi-u6-access-point.jpg',
+        'Extender'     => 'images/products/networking/tp-link-tl-wa855re-range-extender.jpg',
+        'RAM'          => 'images/products/storage/kingston-fury-8gb-ddr4-3200mhz-kf432c16bb-8.jpg',
+        'DDR'          => 'images/products/storage/kingston-fury-8gb-ddr4-3200mhz-kf432c16bb-8.jpg',
+        'NVMe'         => 'images/products/storage/samsung-980-500gb-nvme-ssd-mz-v8v500.jpg',
+        'SSD'          => 'images/products/storage/kingston-a400-480gb-sata-ssd-sa400s37.jpg',
+        'HDD'          => 'images/products/storage/seagate-barracuda-1tb-hdd-st1000dm010.jpg',
     ];
     foreach ($byName as $needle => $image) {
         if ($productName !== '' && mb_stripos($productName, $needle) !== false) {
@@ -133,7 +142,10 @@ function product_blurb(array $row): string
         'Camera'         => 'security camera for shop and office coverage',
         'SSD'            => 'solid-state drive for faster boot and loading times',
         'HDD'            => 'hard disk for bulk storage and backups',
+        'NVMe'           => 'high-speed M.2 NVMe PCIe solid-state drive',
         'DDR'            => 'memory module for upgrading a desktop or laptop',
+        'RAM'            => 'memory module for upgrading a desktop or laptop',
+        'MacBook'        => 'ultra-thin Apple silicon notebook for productivity on the go',
         'Router'         => 'router for home and small-office networks',
         'Switch'         => 'network switch for wired office networks',
         'Range Extender' => 'range extender that clears Wi-Fi dead spots',
@@ -391,6 +403,14 @@ function get_categories(): array
         ['CategoryID' => 3, 'CategoryName' => 'Networking Equipment'],
         ['CategoryID' => 4, 'CategoryName' => 'Accessories'],
     ];
+}
+
+/**
+ * Fallback catalogue when database is unreachable.
+ */
+function offline_catalog(): array
+{
+    return [];
 }
 
 /**

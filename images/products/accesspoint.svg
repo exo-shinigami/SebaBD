@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="Wireless Access Point illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="apBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.7" stop-color="#e4eaee"/>
+      <stop offset="1" stop-color="#c5d1d9"/>
+    </linearGradient>
+    <linearGradient id="ringGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0ea5b5"/>
+      <stop offset="1" stop-color="#37d3c3"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="165" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- Wi-Fi Radiation Waves around AP -->
+  <g fill="none" stroke="#0ea5b5" stroke-width="3" stroke-linecap="round" opacity="0.45">
+    <path d="M120 180 A 190 190 0 0 1 480 180"/>
+    <path d="M150 150 A 230 230 0 0 1 450 150"/>
+  </g>
+
+  <!-- Ceiling Mount Plate -->
+  <ellipse cx="300" cy="180" rx="140" ry="35" fill="#a4b3bf"/>
+  <rect x="160" y="180" width="280" height="15" fill="#8d9da9"/>
+  <ellipse cx="300" cy="195" rx="140" ry="35" fill="#8d9da9"/>
+
+  <!-- Access Point Main Dome Disc -->
+  <ellipse cx="300" cy="225" rx="175" ry="55" fill="#bdc9d2"/>
+  <ellipse cx="300" cy="235" rx="170" ry="52" fill="url(#apBody)"/>
+  <ellipse cx="300" cy="240" rx="145" ry="42" fill="#f8fafc"/>
+
+  <!-- Glowing LED Status Ring (UniFi / Omada signature ring) -->
+  <ellipse cx="300" cy="240" rx="60" ry="18" fill="none" stroke="url(#ringGlow)" stroke-width="6"/>
+  <ellipse cx="300" cy="240" rx="60" ry="18" fill="none" stroke="#37d3c3" stroke-width="2" opacity="0.8"/>
+  <ellipse cx="300" cy="240" rx="55" ry="16" fill="#f0fdf4" opacity="0.2"/>
+
+  <!-- Subtle Logo / Center pip -->
+  <circle cx="300" cy="240" r="5" fill="#0ea5b5"/>
+
+  <!-- Drop Shadow under Access Point -->
+  <ellipse cx="300" cy="345" rx="160" ry="18" fill="#1b242c" opacity="0.10"/>
+</svg>

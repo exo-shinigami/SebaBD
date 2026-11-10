@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="Optical Computer Mouse illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="mouseBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b4754"/>
+      <stop offset="0.6" stop-color="#242e38"/>
+      <stop offset="1" stop-color="#141a20"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="160" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- USB Cable protruding from front of mouse -->
+  <path d="M300 135 C 300 80, 260 60, 220 50" fill="none" stroke="#64748b" stroke-width="5" stroke-linecap="round"/>
+  <!-- Front Cable Strain Relief -->
+  <rect x="295" y="130" width="10" height="12" rx="2" fill="#1e293b"/>
+
+  <!-- Mouse Body (Symmetrical Oval Ergonomic Contour) -->
+  <path d="M220 220 C 220 150, 255 135, 300 135 C 345 135, 380 150, 380 220 C 380 300, 350 330, 300 330 C 250 330, 220 300, 220 220 Z" 
+        fill="url(#mouseBody)" stroke="#475569" stroke-width="2"/>
+
+  <!-- Left / Right Click Split Seam -->
+  <line x1="300" y1="135" x2="300" y2="215" stroke="#141a20" stroke-width="3"/>
+  <!-- Transverse Separation Arc -->
+  <path d="M225 215 C 265 225, 335 225, 375 215" fill="none" stroke="#141a20" stroke-width="2"/>
+
+  <!-- Scroll Wheel Recess & Wheel -->
+  <rect x="291" y="152" width="18" height="42" rx="9" fill="#0f172a"/>
+  <!-- Textured Scroll Wheel -->
+  <rect x="294" y="156" width="12" height="34" rx="6" fill="#0ea5b5"/>
+  <line x1="294" y1="165" x2="306" y2="165" stroke="#ffffff" stroke-width="2" opacity="0.7"/>
+  <line x1="294" y1="173" x2="306" y2="173" stroke="#ffffff" stroke-width="2" opacity="0.7"/>
+  <line x1="294" y1="181" x2="306" y2="181" stroke="#ffffff" stroke-width="2" opacity="0.7"/>
+
+  <!-- Palm Rest Subtle Accent Line -->
+  <ellipse cx="300" cy="275" rx="35" ry="15" fill="none" stroke="#334155" stroke-width="2"/>
+  <circle cx="300" cy="275" r="4" fill="#37d3c3" opacity="0.8"/>
+
+  <!-- Drop Shadow -->
+  <ellipse cx="300" cy="345" rx="90" ry="14" fill="#1b242c" opacity="0.12"/>
+</svg>

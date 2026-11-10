@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="MacBook Air M2 illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#475569"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="screenGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0284c7"/>
+      <stop offset="0.5" stop-color="#0ea5b5"/>
+      <stop offset="1" stop-color="#1e1b4b"/>
+    </linearGradient>
+    <linearGradient id="deckGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cbd5e1"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="160" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- MacBook Lid / Display (Opened angled view) -->
+  <rect x="140" y="85" width="320" height="205" rx="14" fill="#0f172a" stroke="#64748b" stroke-width="2"/>
+
+  <!-- Liquid Retina Screen -->
+  <rect x="150" y="95" width="300" height="185" rx="6" fill="url(#screenGrad)"/>
+
+  <!-- Display Notch at Top Center -->
+  <path d="M284 95 L284 105 A 3 3 0 0 0 287 108 L313 108 A 3 3 0 0 0 316 105 L316 95 Z" fill="#0f172a"/>
+  <!-- FaceTime HD Camera dot -->
+  <circle cx="300" cy="101" r="2.5" fill="#37d3c3"/>
+
+  <!-- Display Bezel Logo / Chin -->
+  <rect x="150" y="280" width="300" height="10" fill="#0f172a"/>
+
+  <!-- Lower Base Unibody (Bottom Chassis) -->
+  <polygon points="100,320 135,288 465,288 500,320" fill="url(#deckGrad)" stroke="#64748b" stroke-width="1.5"/>
+  <rect x="100" y="320" width="400" height="14" rx="7" fill="#64748b"/>
+
+  <!-- Magic Keyboard Well -->
+  <polygon points="160,308 180,292 420,292 440,308" fill="#1e293b"/>
+  <!-- Keycaps Rows -->
+  <g fill="#0f172a">
+    <polygon points="184,294 198,294 196,297 182,297"/>
+    <polygon points="202,294 216,294 214,297 200,297"/>
+    <polygon points="220,294 234,294 232,297 218,297"/>
+    <polygon points="238,294 252,294 250,297 236,297"/>
+    <polygon points="256,294 270,294 268,297 254,297"/>
+    <polygon points="274,294 288,294 286,297 272,297"/>
+    <polygon points="292,294 306,294 304,297 290,297"/>
+    <polygon points="310,294 324,294 322,297 308,297"/>
+    <polygon points="328,294 342,294 340,297 326,297"/>
+    <polygon points="346,294 360,294 358,297 344,297"/>
+    <polygon points="364,294 378,294 376,297 362,297"/>
+    <polygon points="382,294 396,294 394,297 380,297"/>
+    <polygon points="400,294 416,294 414,297 398,297"/>
+  </g>
+
+  <!-- Large Force Touch Glass Trackpad -->
+  <polygon points="260,318 266,310 334,310 340,318" fill="#cbd5e1" stroke="#94a3b8" stroke-width="1"/>
+
+  <!-- Display Open Lip Cutout -->
+  <rect x="280" y="320" width="40" height="4" rx="2" fill="#475569"/>
+
+  <!-- Drop Shadow -->
+  <ellipse cx="300" cy="345" rx="210" ry="14" fill="#1b242c" opacity="0.12"/>
+</svg>

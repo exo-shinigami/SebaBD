@@ -38,3 +38,9 @@ composer.lock
 # on this machine. The sample accounts themselves are documented in README.md
 # and installed by database/e_commerce.sql.
 LOGIN-INFO.txt
+
+# Student presentation and report scratch materials
+extra documents/
+scratch/
+database/schema.sql
+database/sample_data.sql

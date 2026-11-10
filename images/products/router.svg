@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="Wi-Fi Router illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#33414e"/>
+      <stop offset="1" stop-color="#18222a"/>
+    </linearGradient>
+    <linearGradient id="antenna" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#222c35"/>
+      <stop offset="1" stop-color="#41515f"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="160" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- Antennas: 4 high-gain antennas -->
+  <!-- Outer Left -->
+  <path d="M155 240 L110 95 L124 90 L169 235 Z" fill="url(#antenna)"/>
+  <circle cx="162" cy="238" r="8" fill="#18222a"/>
+  <!-- Inner Left -->
+  <path d="M230 230 L212 85 L226 83 L244 228 Z" fill="url(#antenna)"/>
+  <circle cx="237" cy="229" r="8" fill="#18222a"/>
+  <!-- Inner Right -->
+  <path d="M363 228 L374 83 L388 85 L370 230 Z" fill="url(#antenna)"/>
+  <circle cx="363" cy="229" r="8" fill="#18222a"/>
+  <!-- Outer Right -->
+  <path d="M431 235 L476 90 L490 95 L445 240 Z" fill="url(#antenna)"/>
+  <circle cx="438" cy="238" r="8" fill="#18222a"/>
+
+  <!-- Wi-Fi Signal Waves -->
+  <g fill="none" stroke="#0ea5b5" stroke-width="4" stroke-linecap="round" opacity="0.6">
+    <path d="M260 70 A 55 55 0 0 1 340 70"/>
+    <path d="M242 50 A 80 80 0 0 1 358 50"/>
+    <path d="M224 30 A 105 105 0 0 1 376 30"/>
+  </g>
+
+  <!-- Router Base / Chassis -->
+  <polygon points="120,270 170,220 430,220 480,270" fill="#3a4854"/>
+  <polygon points="120,270 480,270 470,300 130,300" fill="url(#body)"/>
+
+  <!-- Front Bevel & Ventilation lines -->
+  <line x1="180" y1="235" x2="420" y2="235" stroke="#222c35" stroke-width="3"/>
+  <line x1="190" y1="245" x2="410" y2="245" stroke="#222c35" stroke-width="2"/>
+
+  <!-- Center Branding / Accent Stripe -->
+  <polygon points="285,220 315,220 312,270 288,270" fill="#0ea5b5" opacity="0.8"/>
+
+  <!-- Front LED Indicators -->
+  <circle cx="230" cy="285" r="4" fill="#37d3c3"/>
+  <circle cx="255" cy="285" r="4" fill="#37d3c3"/>
+  <circle cx="280" cy="285" r="4" fill="#37d3c3"/>
+  <circle cx="305" cy="285" r="4" fill="#37d3c3"/>
+  <circle cx="330" cy="285" r="4" fill="#37d3c3"/>
+  <circle cx="355" cy="285" r="4" fill="#5d6b77"/>
+  <circle cx="380" cy="285" r="4" fill="#5d6b77"/>
+
+  <!-- Drop Shadow -->
+  <ellipse cx="300" cy="335" rx="190" ry="16" fill="#1b242c" opacity="0.12"/>
+</svg>

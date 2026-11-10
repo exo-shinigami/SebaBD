@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" role="img" aria-label="USB-C Multiport Hub illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef4f6"/>
+      <stop offset="1" stop-color="#e3ecf1"/>
+    </linearGradient>
+    <linearGradient id="hubBody" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#475569"/>
+      <stop offset="0.5" stop-color="#334155"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <circle cx="300" cy="225" r="160" fill="#0ea5b5" opacity="0.08"/>
+
+  <!-- Braided USB-C Cable curving out of hub -->
+  <path d="M190 225 Q 120 225, 120 160 T 170 120" fill="none" stroke="#64748b" stroke-width="10" stroke-linecap="round"/>
+  <!-- Metallic Strain Relief Boot -->
+  <rect x="175" y="215" width="22" height="20" rx="4" fill="#334155"/>
+  <!-- USB-C Plug -->
+  <rect x="165" y="108" width="40" height="24" rx="5" fill="#334155"/>
+  <rect x="205" y="112" width="18" height="16" rx="4" fill="#94a3b8"/>
+  <rect x="220" y="116" width="6" height="8" rx="2" fill="#0ea5b5"/>
+
+  <!-- Hub Main Aluminum Enclosure -->
+  <rect x="190" y="180" width="280" height="90" rx="16" fill="url(#hubBody)" stroke="#64748b" stroke-width="2"/>
+  <!-- Top Chamfer Highlight -->
+  <line x1="205" y1="184" x2="455" y2="184" stroke="#94a3b8" stroke-width="2" opacity="0.6"/>
+
+  <!-- Power LED Indicator -->
+  <circle cx="225" cy="225" r="4" fill="#37d3c3"/>
+  <circle cx="225" cy="225" r="7" fill="#37d3c3" opacity="0.3"/>
+
+  <!-- Port 1: USB 3.0 Type-A (with blue tongue) -->
+  <rect x="255" y="213" width="42" height="24" rx="4" fill="#0f172a"/>
+  <rect x="261" y="221" width="30" height="8" rx="2" fill="#0ea5b5"/>
+
+  <!-- Port 2: USB 3.0 Type-A -->
+  <rect x="315" y="213" width="42" height="24" rx="4" fill="#0f172a"/>
+  <rect x="321" y="221" width="30" height="8" rx="2" fill="#0ea5b5"/>
+
+  <!-- Port 3: USB-C Data / PD Port -->
+  <rect x="375" y="218" width="28" height="14" rx="7" fill="#0f172a"/>
+  <rect x="382" y="222" width="14" height="6" rx="3" fill="#94a3b8"/>
+
+  <!-- Port 4: SD Card Slot -->
+  <rect x="420" y="216" width="32" height="6" rx="2" fill="#0f172a"/>
+  <rect x="420" y="226" width="22" height="5" rx="1.5" fill="#0f172a"/>
+
+  <!-- Subtle Port Labels -->
+  <rect x="267" y="244" width="18" height="3" rx="1.5" fill="#64748b"/>
+  <rect x="327" y="244" width="18" height="3" rx="1.5" fill="#64748b"/>
+
+  <!-- Drop Shadow -->
+  <ellipse cx="320" cy="315" rx="160" ry="14" fill="#1b242c" opacity="0.10"/>
+</svg>
