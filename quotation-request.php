@@ -393,7 +393,7 @@ ajax_errors($errors);
                           <?= htmlspecialchars($p['ProductName']) ?>
                         </option>
                         <?php endforeach; ?>
-                        </optgroup>
+                        <?php if ($lastCat !== null): ?></optgroup><?php endif; ?>
                       </select>
                       <small class="line-stock text-muted" data-stock-note></small>
                     </div>
@@ -441,7 +441,7 @@ ajax_errors($errors);
                           <?= htmlspecialchars($p['ProductName']) ?>
                         </option>
                         <?php endforeach; ?>
-                        </optgroup>
+                        <?php if ($lastCat !== null): ?></optgroup><?php endif; ?>
                       </select>
                       <small class="line-stock text-muted" data-stock-note></small>
                     </div>

@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $duplicates = array_diff_assoc($serials, array_unique($serials));
                     if ($duplicates) {
                         $errors[] = 'The same serial number appears twice in the list: '
-                                  . htmlspecialchars(implode(', ', array_unique($duplicates))) . '.';
+                                  . implode(', ', array_unique($duplicates)) . '.';
                     }
 
                     if (!$errors) {

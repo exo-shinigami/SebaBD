@@ -98,8 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             )[0]['n'] ?? 0);
 
             if (!$activationSupported) {
-                $errors[] = 'The account state column is missing. Re-import '
-                          . '<code>database/e_commerce.sql</code>, then reload this page.';
+                $errors[] = 'The account state column is missing. Re-import database/e_commerce.sql, then reload this page.';
             } elseif (!$target) {
                 $errors[] = 'That account no longer exists.';
             } elseif (!$activate && $userId === (int) $user['UserID']) {
@@ -144,9 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // client.UserID is ON DELETE SET NULL, so deleting would silently
                 // orphan the company's login. Ask for the link to be removed first.
                 $errors[] = 'Account “' . $target[0]['Username'] . '” is the login for company #'
-                          . (int) $target[0]['ClientID'] . '. Unlink it in '
-                          . '<a class="alert-link" href="admin-customers.php?action=edit&id=' . (int) $target[0]['ClientID'] . '">that company</a>'
-                          . ' before deleting the account.';
+                          . (int) $target[0]['ClientID'] . '. Unlink it in that company record before deleting the account.';
             } else {
                 db_delete($pdo, 'user', ['UserID' => $userId]);
                 flash_set('success', 'Account “' . $target[0]['Username'] . '” deleted.');
@@ -383,7 +380,7 @@ echo admin_lead('Users &amp; roles', 'Roles belong to SebaBD staff only — a cu
   <div class="ajax-errors" data-ajax-errors>
     <?php if ($errors): ?>
     <div class="alert alert-danger">
-      <ul class="mb-0"><?php foreach ($errors as $err): ?><li><?= $err ?></li><?php endforeach; ?></ul>
+      <ul class="mb-0"><?php foreach ($errors as $err): ?><li><?= htmlspecialchars($err) ?></li><?php endforeach; ?></ul>
     </div>
     <?php endif; ?>
   </div>

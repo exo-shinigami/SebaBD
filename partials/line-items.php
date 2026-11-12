@@ -83,7 +83,7 @@ $renderRow = function (array $line) use ($catalog, $warrantyByProduct, $price_ke
               <?= htmlspecialchars($product['ProductName']) ?>
             </option>
             <?php endforeach; ?>
-            </optgroup>
+            <?php if ($lastCategory !== null): ?></optgroup><?php endif; ?>
           </select>
           <small class="line-stock text-muted" data-stock-note></small>
         </div>

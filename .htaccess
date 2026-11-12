@@ -1,49 +1,42 @@
-# SebaBD — Apache configuration.
+# SebaBD — Apache directory & security rules.
 #
-# Drop this project into XAMPP's htdocs (or symlink it) and everything below
-# applies automatically. Nothing here is required to make the site work; each
-# rule closes a gap that would otherwise be visible to a visitor.
+# Three jobs:
+#   1. Send a missing address to 404.php instead of Apache's plain error page.
+#      RewriteBase is omitted on purpose so the same file works at the server
+#      root and inside a subdirectory such as /Ecommerce%20Website/.
+#   2. Keep database dumps, credentials, vendor libraries, internal includes,
+#      and local configuration out of the browser.
+#   3. Emit baseline HTTP security headers on static and dynamic responses.
 
-# Friendly not-found page. Apache keeps the 404 status; 404.php then renders the
-# normal site chrome with a search box and the catalog shortcuts.
-ErrorDocument 404 404.php
+Options -Indexes
+ServerSignature Off
 
-# ErrorDocument's URL is resolved against the *server's* document root, so on a
-# subdirectory install (htdocs/<project>/) it points at a file that does not
-# exist and Apache falls back to its own seven-byte "Not Found" body — the page
-# above never renders. The rewrite resolves against this directory instead, so
-# the friendly page works whatever the folder is called, and the two conditions
-# let real files and directories pass through untouched. 404.php answers 404
-# with http_response_code() itself, so the status stays correct.
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ 404.php [L]
+<IfModule mod_headers.c>
+    Header setifempty X-Content-Type-Options "nosniff"
+    Header setifempty X-Frame-Options "SAMEORIGIN"
+    Header setifempty Referrer-Policy "strict-origin-when-cross-origin"
+    Header setifempty Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()"
+    Header always unset X-Powered-By
+</IfModule>
 
-# Never serve a PHP source file as text. If PHP ever fails to load, Apache would
-# otherwise hand out config.php (database credentials) and the SQL dumps as
-# plain files. Denying them outright removes that failure mode.
-<FilesMatch "\.(sql|md|log|ini|example\.php)$">
+# A relative ErrorDocument is treated by Apache as a literal message string, so
+# a non-existent path goes through mod_rewrite instead: any request that is not
+# a real file or directory is handed to 404.php in the same folder.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block direct HTTP access to internal directories
+    RewriteRule ^(database|vendor|scratch|\.freebuff|\.git|partials|reports)(/|$) - [F,L]
+
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ 404.php [L]
+</IfModule>
+
+<FilesMatch "\.(sql|md|log|ini|txt|json|lock|db|db-shm|db-wal|bat|ps1|sh|example\.php)$">
     Require all denied
 </FilesMatch>
-<Files "config.php">
+
+<FilesMatch "^(config|db|helpers|catalog-data|cart-data|admin-bootstrap|pdf-document)\.php$">
     Require all denied
-</Files>
-
-# Directory listings leak the shape of the project.
-Options -Indexes
-
-# Cache the stylesheet and scripts for a week, but never cache PHP responses.
-<IfModule mod_headers.c>
-    <FilesMatch "\.(css|js|png|jpe?g|svg|webp|woff2?)$">
-        Header set Cache-Control "public, max-age=604800"
-    </FilesMatch>
-    <FilesMatch "\.php$">
-        Header set Cache-Control "no-store"
-    </FilesMatch>
-</IfModule>
-
-# Compress text responses when the browser asks for it.
-<IfModule mod_deflate.c>
-    AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript application/json image/svg+xml
-</IfModule>
+</FilesMatch>

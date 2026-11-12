@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash_set('success', 'Your details were saved.');
                 post_success('account.php');
             } catch (Throwable $e) {
-                $errors[] = 'Your details could not be saved: ' . $e->getMessage();
+                $errors[] = 'Your details could not be saved.' . (APP_DEBUG ? ' ' . $e->getMessage() : ' Please try again.');
             }
         }
     } elseif ($intent === 'password') {
@@ -139,10 +139,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // login: the current one is carried over on purpose so the
                 // person who just proved they know the new secret stays in.
                 session_regenerate_id(true);
+                csrf_rotate();
                 flash_set('success', 'Your password was changed. Use it the next time you sign in.');
                 post_success('account.php');
             } catch (Throwable $e) {
-                $errors[] = 'The password could not be changed: ' . $e->getMessage();
+                $errors[] = 'The password could not be changed.' . (APP_DEBUG ? ' ' . $e->getMessage() : ' Please try again.');
             }
         }
     }

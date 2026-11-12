@@ -100,7 +100,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->commit();
                 clear_old();
                 if ($linkUserId) {
-                    $_SESSION['user_id'] = $linkUserId;
+                    session_regenerate_id(true);
+                    csrf_rotate();
+                    $_SESSION['user_id']       = $linkUserId;
+                    $_SESSION['last_activity'] = time();
                 }
                 flash_set('success', 'B2B account registered — company #' . $clientId . ', branch “' . $branchName . '” created. Our sales team will reach out shortly.');
                 // AJAX callers get {ok:true, redirect:…} instead of a 302.

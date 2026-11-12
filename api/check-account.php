@@ -16,6 +16,11 @@ if (!in_array($_SERVER['REQUEST_METHOD'], ['GET', 'HEAD'], true)) {
     json_response(['ok' => false, 'error' => 'This endpoint is read-only; use GET.'], 405);
 }
 
+if (rate_limit_retry_after('check_account_ip', '', 30, 60) > 0) {
+    json_response(['ok' => false, 'error' => 'Too many lookup requests. Please wait a moment.'], 429);
+}
+rate_limit_hit('check_account_ip', '', 60);
+
 if (!db()) {
     json_response(['ok' => false, 'error' => 'The database is offline.'], 503);
 }

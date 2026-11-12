@@ -17,6 +17,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($identifier === '' || $password === '') {
         $errors[] = 'Please enter your username/email and password.';
+    } else {
+        $waitAccount = rate_limit_retry_after('login_account', $identifier, 5, 600);
+        $waitIp      = rate_limit_retry_after('login_ip', '', 15, 600);
+        $wait        = max($waitAccount, $waitIp);
+        if ($wait > 0) {
+            $mins = max(1, (int) ceil($wait / 60));
+            $errors[] = "Too many failed sign-in attempts. Please wait about $mins minute" . ($mins === 1 ? '' : 's') . " before trying again.";
+        }
     }
 
     $pdo = db();
@@ -38,9 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!account_is_active((int) $rows[0]['UserID'])) {
                 $errors[] = 'This account has been deactivated. Please contact the SebaBD administrator.';
             } else {
+                rate_limit_clear('login_account', $identifier);
                 clear_old();
                 session_regenerate_id(true);
-                $_SESSION['user_id'] = (int) $rows[0]['UserID'];
+                csrf_rotate();
+                $_SESSION['user_id']       = (int) $rows[0]['UserID'];
+                $_SESSION['last_activity'] = time();
                 flash_set('success', 'Signed in as ' . $rows[0]['FullName'] . '.');
                 // Only allow internal redirects: cart_return_path() refuses full
                 // URLs, protocol-relative //host targets and paths that climb out,
@@ -50,6 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 post_success($target);
             }
         } else {
+            rate_limit_hit('login_account', $identifier, 600);
+            rate_limit_hit('login_ip', '', 600);
             $errors[] = 'Invalid credentials — check your username/email and password.';
         }
     }

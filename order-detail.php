@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     });
                     flash_set('success', 'Order #' . $id . ' was cancelled. Nothing will be shipped or invoiced.');
                 } catch (Throwable $e) {
-                    flash_set('error', 'The order could not be cancelled: ' . $e->getMessage());
+                    flash_set('error', 'The order could not be cancelled.' . (APP_DEBUG ? ' ' . $e->getMessage() : ' Please try again.'));
                 }
                 header('Location: order-detail.php?id=' . $id);
                 exit;

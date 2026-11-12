@@ -4,17 +4,48 @@
  */
 require_once __DIR__ . '/db.php';
 
+// Align runtime error display with APP_DEBUG so stack traces or file paths
+// never leak in production while errors are still logged.
+ini_set('display_errors', APP_DEBUG ? '1' : '0');
+ini_set('display_startup_errors', APP_DEBUG ? '1' : '0');
+ini_set('log_errors', '1');
+
+// Emit baseline HTTP security headers on every response (works under both
+// Apache and the built-in PHP CLI server).
+if (!headers_sent()) {
+    header_remove('X-Powered-By');
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()');
+    header("Content-Security-Policy: frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'");
+}
+
 if (session_status() === PHP_SESSION_NONE) {
-    // Harden the session cookie before it is issued: the browser cannot read
-    // it from JavaScript, and SameSite=Lax keeps a form on another site from
-    // riding along with the visitor's session. 'secure' follows the request
-    // scheme, so plain-HTTP development on XAMPP keeps working.
+    // Harden the session cookie and prevent session adoption attacks via strict mode.
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
     session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
         'httponly' => true,
         'samesite' => 'Lax',
-        'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                   || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'),
     ]);
     session_start();
+}
+
+// Enforce a 2-hour idle timeout for authenticated sessions.
+if (!empty($_SESSION['user_id'])) {
+    $now = time();
+    if (isset($_SESSION['last_activity']) && ($now - (int) $_SESSION['last_activity']) > 7200) {
+        $_SESSION = [];
+        session_regenerate_id(true);
+    } else {
+        $_SESSION['last_activity'] = $now;
+    }
 }
 
 // Customer logins (individual or B2B) carry no role at all — user.RoleID is
@@ -419,8 +450,22 @@ function clear_old(): void
  * same MAX() and colliding on the primary key. Always call this inside
  * db_transaction().
  */
+/**
+ * Validate a SQL table or column identifier so dynamic query builders can
+ * never interpolate anything outside strict alphanumeric/underscore names.
+ */
+function assert_sql_ident(string $ident): string
+{
+    if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $ident)) {
+        throw new InvalidArgumentException('Invalid SQL identifier: ' . $ident);
+    }
+    return $ident;
+}
+
 function next_id(PDO $pdo, string $table, string $column): int
 {
+    assert_sql_ident($table);
+    assert_sql_ident($column);
     $sql = "SELECT COALESCE(MAX(`$column`), 0) + 1 AS n FROM `$table`"
          . ($pdo->inTransaction() ? ' FOR UPDATE' : '');
 
@@ -603,6 +648,82 @@ function csrf_token(): string
     }
 
     return $_SESSION['csrf_token'];
+}
+
+/**
+ * Rotate the CSRF token on authentication state changes (login, registration, logout).
+ */
+function csrf_rotate(): void
+{
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+/* ========================================================= Rate Limiting */
+
+/**
+ * File-backed sliding-window rate limiter to protect authentication and
+ * account-lookup endpoints against brute-force and enumeration attacks.
+ */
+function rate_limit_file(string $scope, string $subject = ''): string
+{
+    $ip  = (string) ($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+    $key = hash('sha256', 'sebabd_rl|' . $scope . '|' . $ip . '|' . strtolower(trim($subject)));
+    return rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR . 'sebabd_rl_' . $key . '.json';
+}
+
+/**
+ * Returns remaining lockout seconds (> 0) if the caller has exceeded $maxAttempts
+ * within $windowSeconds, or 0 if allowed.
+ */
+function rate_limit_retry_after(string $scope, string $subject = '', int $maxAttempts = 5, int $windowSeconds = 600): int
+{
+    $file = rate_limit_file($scope, $subject);
+    if (!is_file($file)) {
+        return 0;
+    }
+    $raw  = @file_get_contents($file);
+    $hits = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($hits)) {
+        return 0;
+    }
+    $nowCutoff = time() - $windowSeconds;
+    $recent    = array_values(array_filter($hits, fn($t) => is_int($t) && $t > $nowCutoff));
+    if (count($recent) < $maxAttempts) {
+        return 0;
+    }
+    $oldest = min($recent);
+    return max(1, ($oldest + $windowSeconds) - time());
+}
+
+/**
+ * Record one attempt in the sliding window for ($scope, $subject).
+ */
+function rate_limit_hit(string $scope, string $subject = '', int $windowSeconds = 600): void
+{
+    $file      = rate_limit_file($scope, $subject);
+    $now       = time();
+    $nowCutoff = $now - $windowSeconds;
+    $hits      = [];
+    if (is_file($file)) {
+        $raw     = @file_get_contents($file);
+        $decoded = is_string($raw) ? json_decode($raw, true) : null;
+        if (is_array($decoded)) {
+            $hits = array_values(array_filter($decoded, fn($t) => is_int($t) && $t > $nowCutoff));
+        }
+    }
+    $hits[] = $now;
+    @file_put_contents($file, json_encode($hits), LOCK_EX);
+}
+
+/**
+ * Clear recorded attempts after a successful authentication.
+ */
+function rate_limit_clear(string $scope, string $subject = ''): void
+{
+    $file = rate_limit_file($scope, $subject);
+    if (is_file($file)) {
+        @unlink($file);
+    }
 }
 
 /**
@@ -1284,13 +1405,15 @@ function db_transaction(PDO $pdo, callable $work): mixed
  */
 function db_insert(PDO $pdo, string $table, array $data, string $idColumn = ''): int
 {
+    assert_sql_ident($table);
     $id = 0;
     if ($idColumn !== '') {
+        assert_sql_ident($idColumn);
         $id  = next_id($pdo, $table, $idColumn);
         $data = [$idColumn => $id] + $data;
     }
 
-    $columns = array_keys($data);
+    $columns = array_map('assert_sql_ident', array_keys($data));
     $sql = 'INSERT INTO `' . $table . '` (`' . implode('`, `', $columns) . '`) VALUES ('
          . implode(', ', array_map(fn($c) => ':' . $c, $columns)) . ')';
 
@@ -1314,14 +1437,17 @@ function db_update(PDO $pdo, string $table, array $data, array $where): int
     if (!$data || !$where) {
         return 0;
     }
+    assert_sql_ident($table);
 
     $sets   = [];
     $params = [];
     foreach ($data as $column => $value) {
+        assert_sql_ident((string) $column);
         $sets[]                    = '`' . $column . '` = :set_' . $column;
         $params[':set_' . $column] = $value;
     }
     foreach ($where as $column => $value) {
+        assert_sql_ident((string) $column);
         $params[':w_' . $column] = $value;
     }
     $conditions = array_map(fn($c) => '`' . $c . '` = :w_' . $c, array_keys($where));
@@ -1362,9 +1488,11 @@ function db_delete(PDO $pdo, string $table, array $where): int
     if (!$where) {
         return 0;
     }
+    assert_sql_ident($table);
 
     $params     = [];
     foreach ($where as $column => $value) {
+        assert_sql_ident((string) $column);
         $params[':w_' . $column] = $value;
     }
     $conditions = array_map(fn($c) => '`' . $c . '` = :w_' . $c, array_keys($where));
@@ -1380,6 +1508,7 @@ function db_delete(PDO $pdo, string $table, array $where): int
  */
 function db_count(string $table, string $whereSql = '', array $params = []): int
 {
+    assert_sql_ident($table);
     $rows = db_fetch_all(
         'SELECT COUNT(*) AS n FROM `' . $table . '`'
         . ($whereSql !== '' ? ' WHERE ' . $whereSql : ''),

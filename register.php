@@ -31,8 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_valid_phone($phone)) {
         $errors[] = 'Phone number looks invalid.';
     }
-    if (strlen($password) < 6) {
-        $errors[] = 'Password must be at least 6 characters.';
+    if ($pwErr = password_problem($password)) {
+        $errors[] = $pwErr;
     }
     if ($password !== $confirm) {
         $errors[] = 'Passwords do not match.';
@@ -102,7 +102,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->commit();
 
                 clear_old();
-                $_SESSION['user_id'] = $userId; // log the new user straight in
+                session_regenerate_id(true);
+                csrf_rotate();
+                $_SESSION['user_id']       = $userId; // log the new user straight in
+                $_SESSION['last_activity'] = time();
                 flash_set('success', 'Welcome to SebaBD, ' . $fullName . '! Your account is ready.');
                 // AJAX callers get {ok:true, redirect:…} instead of a 302.
                 // A new customer lands on the dashboard: it shows the account,

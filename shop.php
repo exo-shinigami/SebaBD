@@ -39,7 +39,7 @@ $sorts = [
 ];
 
 if ($filters['q'] !== '') {
-    $heading = 'Search results for “' . htmlspecialchars($filters['q']) . '”';
+    $heading = 'Search results for “' . $filters['q'] . '”';
 } elseif ($categoryName !== '') {
     $heading = $categoryName;
 } elseif ($filters['brand'] !== '') {
@@ -65,7 +65,7 @@ $windowEnd   = min($pageCount, $windowStart + 4);
                   <?php endif; ?>
                 </ol>
               </nav>
-              <h1 class="h3 mb-1"><?= $heading ?></h1>
+              <h1 class="h3 mb-1"><?= htmlspecialchars($heading) ?></h1>
               <p class="text-muted mb-0">
                 <?php if ($showing > 0): ?>
                 Showing <?= $first ?>–<?= $last ?> of <?= $total ?> product<?= $total === 1 ? '' : 's' ?><?=

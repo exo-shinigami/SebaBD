@@ -606,24 +606,37 @@ function document_csv_output(array $doc): void
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");
 
+    // Neutralise spreadsheet formula injection (=, +, -, @, TAB, CR) in any cell.
+    $csvRow = function (array $cells) use ($out): void {
+        $safe = [];
+        foreach ($cells as $cell) {
+            $str = trim((string) preg_replace('/\s*\R\s*/', ' — ', (string) $cell));
+            if ($str !== '' && preg_match('/^[=+\-@\t\r]/', $str)) {
+                $str = "'" . $str;
+            }
+            $safe[] = $str;
+        }
+        fputcsv($out, $safe);
+    };
+
     $company = company_details();
-    fputcsv($out, [$company['name'], $company['legal']]);
-    fputcsv($out, [$company['address']]);
-    fputcsv($out, [$company['phone'], $company['email'], $company['web']]);
+    $csvRow([$company['name'], $company['legal']]);
+    $csvRow([$company['address']]);
+    $csvRow([$company['phone'], $company['email'], $company['web']]);
     fputcsv($out, []);
-    fputcsv($out, [$doc['kind'] ?? 'Document', '#' . ($doc['number'] ?? '')]);
-    fputcsv($out, [$doc['date_label'] ?? 'Date', $doc['date'] ?? '']);
+    $csvRow([$doc['kind'] ?? 'Document', '#' . ($doc['number'] ?? '')]);
+    $csvRow([$doc['date_label'] ?? 'Date', $doc['date'] ?? '']);
     if (trim((string) ($doc['status'] ?? '')) !== '') {
-        fputcsv($out, ['Status', $doc['status']]);
+        $csvRow(['Status', $doc['status']]);
     }
     fputcsv($out, []);
-    fputcsv($out, [$doc['party_label'] ?? 'Party']);
+    $csvRow([$doc['party_label'] ?? 'Party']);
     foreach ((array) ($doc['party_lines'] ?? []) as $line) {
-        fputcsv($out, [$line]);
+        $csvRow([$line]);
     }
     fputcsv($out, []);
     foreach ((array) ($doc['meta_rows'] ?? []) as $row) {
-        fputcsv($out, [$row['label'] ?? '', $row['value'] ?? '']);
+        $csvRow([$row['label'] ?? '', $row['value'] ?? '']);
     }
 
     $columns = (array) ($doc['columns'] ?? []);
@@ -632,16 +645,11 @@ function document_csv_output(array $doc): void
         $labels[] = $column['label'] ?? '';
     }
 
-    $writeTable = function (array $rows, array $labels) use ($out): void {
+    $writeTable = function (array $rows, array $labels) use ($out, $csvRow): void {
         fputcsv($out, []);
-        fputcsv($out, $labels);
+        $csvRow($labels);
         foreach ($rows as $row) {
-            // A cell can carry an explicit line break (product name + details);
-            // in a spreadsheet that belongs in one cell, so it is joined.
-            fputcsv($out, array_map(
-                fn($cell) => trim((string) preg_replace('/\s*\R\s*/', ' — ', (string) $cell)),
-                (array) $row
-            ));
+            $csvRow((array) $row);
         }
     };
 
@@ -649,15 +657,15 @@ function document_csv_output(array $doc): void
 
     $sumRow = $doc['sum_row'] ?? null;
     if (is_array($sumRow)) {
-        fputcsv($out, ['', (string) ($sumRow['label'] ?? ''), '', '', (string) ($sumRow['value'] ?? '')]);
+        $csvRow(['', (string) ($sumRow['label'] ?? ''), '', '', (string) ($sumRow['value'] ?? '')]);
     }
-    fputcsv($out, ['', (string) ($doc['total_label'] ?? 'Total'), '', '', (string) ($doc['total'] ?? '')]);
+    $csvRow(['', (string) ($doc['total_label'] ?? 'Total'), '', '', (string) ($doc['total'] ?? '')]);
     if (trim((string) ($doc['amount_words'] ?? '')) !== '') {
-        fputcsv($out, [(string) $doc['amount_words']]);
+        $csvRow([(string) $doc['amount_words']]);
     }
 
     foreach ((array) ($doc['balances'] ?? []) as $balance) {
-        fputcsv($out, [(string) ($balance['label'] ?? ''), (string) ($balance['value'] ?? '')]);
+        $csvRow([(string) ($balance['label'] ?? ''), (string) ($balance['value'] ?? '')]);
     }
 
     foreach ((array) ($doc['tables'] ?? []) as $table) {
@@ -666,13 +674,13 @@ function document_csv_output(array $doc): void
             $tableLabels[] = $column['label'] ?? '';
         }
         fputcsv($out, []);
-        fputcsv($out, [(string) ($table['title'] ?? '')]);
+        $csvRow([(string) ($table['title'] ?? '')]);
         $writeTable((array) ($table['rows'] ?? []), $tableLabels);
     }
 
     if (trim((string) ($doc['notes'] ?? '')) !== '') {
         fputcsv($out, []);
-        fputcsv($out, [(string) $doc['notes']]);
+        $csvRow([(string) $doc['notes']]);
     }
 
     fclose($out);

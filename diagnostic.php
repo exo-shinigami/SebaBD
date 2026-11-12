@@ -161,6 +161,10 @@ $testRowResult  = null;
 $action       = $_POST['action'] ?? '';
 $actionError  = null;
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_guard('diagnostic.php');
+}
+
 if ($connected && $action !== '') {
     if ($action === 'test_insert') {
         if (!table_exists($pdo, 'client')) {
@@ -450,6 +454,7 @@ $debugVisible = defined('APP_DEBUG') && APP_DEBUG;
         </p>
 
         <form method="post" class="row g-3 align-items-end">
+          <?= csrf_field() ?>
           <input type="hidden" name="action" value="test_insert">
           <div class="col-12">
             <button type="submit" name="test_insert" value="1" class="btn btn-accent">Run live INSERT test on client</button>
@@ -459,6 +464,7 @@ $debugVisible = defined('APP_DEBUG') && APP_DEBUG;
         <?php if ($testRowExists): ?>
           <hr class="my-4">
           <form method="post" class="row g-3 align-items-end">
+            <?= csrf_field() ?>
             <input type="hidden" name="action" value="clear_test_row">
             <div class="col-12">
               <button type="submit" name="clear_test_row" value="1" class="btn btn-outline-danger">Remove the diagnostic test row</button>

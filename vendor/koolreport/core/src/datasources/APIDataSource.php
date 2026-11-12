@@ -37,7 +37,7 @@ class APIDataSource extends DataSource
         $this->metaSent = false;
     }
 
-    protected function curl($method, $url, $curlOptions = [], $headers, $data)
+    protected function curl($method, $url, $curlOptions = [], $headers = [], $data = null)
     {
         $options = $curlOptions;
         $curl = curl_init();

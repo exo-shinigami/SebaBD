@@ -232,7 +232,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         . 'The sales team confirms it and raises the invoice next.');
                     post_success('order-detail.php?id=' . $orderId . '&placed=1');
                 } catch (Throwable $e) {
-                    $errors[] = 'The order could not be saved: ' . $e->getMessage();
+                    $errors[] = 'The order could not be saved.' . (APP_DEBUG ? ' ' . $e->getMessage() : ' Please try again.');
                     ajax_errors($errors);
                 }
             }
